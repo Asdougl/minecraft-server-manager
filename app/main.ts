@@ -3,15 +3,15 @@ import path from 'path'
 import log from 'electron-log'
 
 import {
-    checkForFolder,
-    createDirectory,
-    checkForServer,
     eula,
-    startServer,
+    MinecraftServer,
+    createMinecraftServer,
+    directoryCheck,
+    eulaCheck,
+    checkForServer,
 } from './server'
-import { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { CheckResponse } from './RendererAPI'
 import { openServerPath } from './files'
+import { Log as ServerLog, parseLine } from './logs'
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
@@ -21,7 +21,7 @@ const createWindow = (onClose: () => void) => {
     const window = new BrowserWindow({
         height: 600,
         width: 400,
-        frame: true,
+        frame: false,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -49,6 +49,14 @@ const createWindow = (onClose: () => void) => {
         if(IS_DEV) {
             window.webContents.openDevTools()
         }
+    })
+
+    window.on('focus', () => {
+        window.webContents.send("window:focus")
+    })
+
+    window.on('blur', () => {
+        window.webContents.send('window:blur')
     })
 
     return window;
@@ -102,10 +110,20 @@ ipcMain.on('window:close', () => {
     if(win) win.close()
 })
 
+ipcMain.handle('window:status', () => {
+    return win ? win.isFocused() : false;
+})
+
 
 /* ------| MINECRAFT SERVER |------ */
 
-let server: ChildProcessWithoutNullStreams | null;
+let server: MinecraftServer | null = null;
+
+let logs: ServerLog[] = [];
+
+app.on('before-quit', async () => {
+    if(server) await server.closeServer();
+})
 
 // We need to:
 //  1) Check that the server folder exists
@@ -114,26 +132,58 @@ let server: ChildProcessWithoutNullStreams | null;
 
 ipcMain.handle('server:status', async () => {
     // Check if server is running
-    return server === null ? 'offline' : 'online';
+    if(server !== null) {
+        // Safe to assume its online
+        return 'online';
+    } else if(!directoryCheck()) {
+        return 'no-folder';
+    } else if(!checkForServer()) {
+        return 'no-server'
+    } else {
+        const eula = await eulaCheck();
+
+        if(eula === 'invalid-eula' || eula === 'no-eula') return 'no-first-run'
+
+        if(eula === 'not-agreed') return 'eula-agree'
+
+        // Otherwise it must just be offline
+        return 'offline'
+
+    }
 })
 
 ipcMain.handle('server:start', async () => {
+
     try {
 
-        server = startServer({
-            onOut: msg => {
-                log.info(msg)
-            },
-            onError: msg => {
-                log.error(msg)
-            },
-            onClose: () => {
+        if(server === null)  {
+
+            if(win) win.webContents.send('server:pending');
+
+            server = await createMinecraftServer();
+
+            server.onOut(msg => {
+                const parsed = parseLine(msg);
+                if(parsed) {
+                    if(parsed.event) {
+                        // fire events based on flags
+                        console.log(`Evt server:${parsed.event} Inbound`);
+                        if(win) win.webContents.send(`server:${parsed.event}`, parsed.eventData)
+                    }
+                    logs = [...logs, parsed];
+                    if(win) win.webContents.send('server:log', parsed);
+                }
+                log.info(msg);
+            })
+
+            server.onError(err => {
+                log.error(err);
+            })
+
+            server.onClose(() => {
                 if(win) win.webContents.send('server:close')
-            },
-            onReady: () => {
-                if(win) win.webContents.send('server:ready')
-            }
-        })
+            })
+        }
 
         return 'success';
 
@@ -144,10 +194,14 @@ ipcMain.handle('server:start', async () => {
     }
 })
 
-ipcMain.handle('server:stop', () => {
+ipcMain.handle('server:stop', async () => {
     try {
         
-        if(server) server.kill('SIGINT');
+        if(server) {
+            await server.closeServer()
+            server = null;
+            logs = [];
+        }
 
         return true;
 
@@ -164,6 +218,10 @@ ipcMain.handle('server:restart', () => {
 
 ipcMain.handle('server:eula', (evt, status) => {
     eula(status);
+})
+
+ipcMain.handle('server:logs', () => {
+    return logs;
 })
 
 ipcMain.handle('files:open', () => {

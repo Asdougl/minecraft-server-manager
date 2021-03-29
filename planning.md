@@ -22,20 +22,20 @@ Renderer will want to do things, here is a versioning breakdown:
 
 ### Version 1
 Actions:
- - Start Server
- - Stop Server
- - Restart Server
+ - Start Server [DONE]
+ - Stop Server [DONE]
+ - Restart Server [DONE]
  - Edit server.properties
- - Agree to EULA
- - Open Server Directory
- - Read Logs
- - Status
+ - Agree to EULA [DONE?]
+ - Open Server Directory [DONE]
+ - Read Logs [DONE]
+ - Status [DONE]
 Events:
- - Server Pending
- - Server Started
+ - Server Pending [DONE]
+ - Server Started [DONE]
  - Server EULA
- - Server Error
- - Server Logged
+ - Server Error 
+ - Server Logged [DONE]
 
 ### Version 2
  - Manage OPs

@@ -1,11 +1,33 @@
-type ServerStatus = 'offline' | 'online';
+import { IpcRendererEvent } from "electron";
+import { Log } from "./logs";
+
+export type ServerStatus = 'offline' | 'online' | 'no-folder' | 'no-server' | 'no-first-run' | 'eula-agree';
 type ServerOutcome = 'success' | 'error' | 'eula';
+
+export type EventCallback<T> = (evt: IpcRendererEvent, extra: T) => void;
+type BindUnbind<T = string | undefined> = (callback: EventCallback<T>) => void;
+
+interface Binders {
+    pending: BindUnbind;
+    started: BindUnbind;
+    eula: BindUnbind;
+    error: BindUnbind;
+    logged: BindUnbind<Log>;
+    close: BindUnbind;
+    progress: BindUnbind;
+    dimension: BindUnbind;
+}
 
 export default interface RendererAPI {
     window: {
         minimize: () => void;
         maximize: () => void;
         close: () => void;
+        isFocused: () => Promise<boolean>;
+        onFocus: BindUnbind;
+        offFocus: BindUnbind;
+        onBlur: BindUnbind;
+        offBlur: BindUnbind;
     };
     actions: {
         getStatus: () => Promise<ServerStatus>;
@@ -14,24 +36,10 @@ export default interface RendererAPI {
         restartServer: () => Promise<ServerOutcome>;
         eulaAgree: (status?: boolean) => Promise<ServerOutcome>;
         openDirectory: () => Promise<void>;
+        getLogs: () => Promise<Log[]>;
     };
-    bind: {
-        pending: (callback: () => void) => void;
-        started: (callback: () => void) => void;
-        eula: (callback: () => void) => void;
-        error: (callback: () => void) => void;
-        logged: (callback: () => void) => void;
-        close: (callback: () => void) => void;
-
-    };
-    unbind: {
-        pending: (callback: () => void) => void;
-        started: (callback: () => void) => void;
-        eula: (callback: () => void) => void;
-        error: (callback: () => void) => void;
-        logged: (callback: () => void) => void;
-        close: (callback: () => void) => void;
-    };
+    bind: Binders;
+    unbind: Binders;
 }
 
 export interface CheckResponse {

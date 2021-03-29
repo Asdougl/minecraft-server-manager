@@ -1,36 +1,60 @@
 import React, { useEffect, useState } from 'react'
-import { Route, BrowserRouter as Router, Switch, useHistory } from 'react-router-dom'
+import { Route, Switch, useHistory } from 'react-router-dom'
 import TitleBar from './components/TitleBar'
 import { ServerStatusContext } from './context/ServerStatus'
 import electronapi from './electron'
 import Dashboard from './views/Dashboard'
 import Settings from './views/Settings'
 import Setup from './views/Setup'
+import { ServerStatus } from '../app/RendererAPI'
+import Initializing from './views/Initializing'
 
 const App = () => {
 
-    const [serverUp, setServerUp] = useState(false);
+    const [serverStatus, setServerStatus] = useState<ServerStatus | ''>('');
+
+    const history = useHistory()
 
     useEffect(() => {
 
         const onClose = () => {
-            setServerUp(false);
+            console.log("Server Closed");
+            setServerStatus('offline');
         }
 
+        const onStart = (evt: any, time?: string) => {
+            console.log(`Server Up${time ? ` ${time}s` : ''}`)
+            setServerStatus('online')
+        }
+
+        electronapi.actions.getStatus().then(status => {
+            if(status !== 'online' && status !== 'offline') {
+                history.push('/setup')
+            } else {
+                history.push('/dashboard')
+            }
+            setServerStatus(status);
+        })
+
+        electronapi.bind.started(onStart)
         electronapi.bind.close(onClose)
 
         return () => {
             electronapi.unbind.close(onClose)
+            electronapi.unbind.started(onStart)
         }
 
     },[])
 
     return (
-        <Router>
-            <ServerStatusContext.Provider value={serverUp}>
+        <ServerStatusContext.Provider value={serverStatus}>
+            <div className="flex flex-col overflow-hidden h-screen">
                 <TitleBar />
                 <Switch>
                     <Route path="/">
+                        <Initializing />
+                    </Route>
+                    <Route path="/dashboard">
                         <Dashboard />
                     </Route>
                     <Route path="/settings">
@@ -40,8 +64,8 @@ const App = () => {
                         <Setup />
                     </Route>
                 </Switch>
-            </ServerStatusContext.Provider>
-        </Router>
+            </div>
+        </ServerStatusContext.Provider>
     )
 }
 
