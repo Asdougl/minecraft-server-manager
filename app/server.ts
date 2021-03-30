@@ -67,9 +67,13 @@ export const checkForServer = async (filename?: string) => {
 export const eulaCheck = async () => {
     try {
         
-        const fsStat = await fs.stat(path.join(app.getAppPath(), 'minecraft', 'eula.txt'))
-
-        if(!fsStat.isFile()) return 'no-eula'
+        // fs.stat throws error on file not found
+        try {
+            const fsStat = await fs.stat(path.join(app.getAppPath(), 'minecraft', 'eula.txt'))
+            if(!fsStat.isFile()) return 'no-eula'
+        } catch (error) {
+            return 'no-eula';
+        }
 
         const contents = await fs.readFile(path.join(app.getAppPath(), 'minecraft', 'eula.txt'));
         const eulaStatus = contents.toString().match(/eula=(true|false)/)
@@ -129,9 +133,12 @@ interface ServerConfig {
 interface MinecraftServerConfig {
     filename?: string;
     gigabytes?: number;
+    onOut: (msg: string) => void;
+    onError: (msg: string) => void;
+    onClose: () => void;
 }
 
-export const createMinecraftServer = async (config?: MinecraftServerConfig): Promise<MinecraftServer> => {
+export const createMinecraftServer = async (config: MinecraftServerConfig): Promise<MinecraftServer> => {
     try {
         
         await directoryCheck();
@@ -150,31 +157,23 @@ export class MinecraftServer {
 
     private child: ChildProcessWithoutNullStreams;
 
-    constructor(config?: MinecraftServerConfig) {
+    constructor(config: MinecraftServerConfig) {
 
         let ram1 = '-Xmx2G', ram2 = '-Xms2G'
-        if(config && config.gigabytes) {
+        if(config.gigabytes) {
             if(config.gigabytes >= 2 && config.gigabytes <= 8) {
                 ram1 = `-Xmx${Math.floor(config.gigabytes)}G`
                 ram2 = `-Xms${Math.floor(config.gigabytes)}G`
             }
         }
 
-        this.child = spawn('java', [ram1, ram2, '-jar', `${config && config.filename ? config.filename : 'server'}.jar`, 'nogui'], { cwd: path.join(app.getAppPath(), 'minecraft') })
+        this.child = spawn('java', [ram1, ram2, '-jar', `${config.filename ? config.filename : 'server'}.jar`, 'nogui'], { cwd: path.join(app.getAppPath(), 'minecraft') })
+
+        this.child.stdout.on('data', config.onOut)
+        this.child.stderr.on('data', config.onError)
+        this.child.on('exit', config.onClose)
 
         process.on('beforeExit', () => this.child.kill('SIGINT'));
-    }
-
-    public onOut = (callback: (msg: string) => void) => {
-        this.child.stdout.on('data', data => callback(data.toString()))
-    }
-
-    public onError = (callback: (err: string) => void) => {
-        this.child.stderr.on('data', data => callback(data.toString()))
-    }
-
-    public onClose = (callback: () => void) => {
-        this.child.on('close', () => callback())
     }
 
     public sendCommand = (command: string) => {

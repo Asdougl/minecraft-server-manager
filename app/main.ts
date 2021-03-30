@@ -160,29 +160,28 @@ ipcMain.handle('server:start', async () => {
 
             if(win) win.webContents.send('server:pending');
 
-            server = await createMinecraftServer();
-
-            server.onOut(msg => {
-                const parsed = parseLine(msg);
-                if(parsed) {
-                    if(parsed.event) {
-                        // fire events based on flags
-                        console.log(`Evt server:${parsed.event} Inbound`);
-                        if(win) win.webContents.send(`server:${parsed.event}`, parsed.eventData)
+            server = await createMinecraftServer({
+                onOut: msg => {
+                    const parsed = parseLine(msg);
+                    if(parsed) {
+                        if(parsed.event) {
+                            // fire events based on flags
+                            console.log(`Evt server:${parsed.event} Inbound`);
+                            if(win) win.webContents.send(`server:${parsed.event}`, parsed.eventData)
+                        }
+                        logs = [...logs, parsed];
+                        if(win) win.webContents.send('server:log', parsed);
                     }
-                    logs = [...logs, parsed];
-                    if(win) win.webContents.send('server:log', parsed);
+                    log.info(msg);
+                },
+                onError: err => {
+                    log.error(err);
+                },
+                onClose: () => {
+                    if(win) win.webContents.send('server:close')
+                    server = null;
                 }
-                log.info(msg);
-            })
-
-            server.onError(err => {
-                log.error(err);
-            })
-
-            server.onClose(() => {
-                if(win) win.webContents.send('server:close')
-            })
+            });
         }
 
         return 'success';
@@ -199,7 +198,6 @@ ipcMain.handle('server:stop', async () => {
         
         if(server) {
             await server.closeServer()
-            server = null;
             logs = [];
         }
 

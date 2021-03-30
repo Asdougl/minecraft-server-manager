@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Route, Switch, useHistory } from 'react-router-dom'
+import { HashRouter as Router, Redirect, Route, Switch } from 'react-router-dom'
 import TitleBar from './components/TitleBar'
 import { ServerStatusContext } from './context/ServerStatus'
 import electronapi from './electron'
@@ -12,8 +12,6 @@ import Initializing from './views/Initializing'
 const App = () => {
 
     const [serverStatus, setServerStatus] = useState<ServerStatus | ''>('');
-
-    const history = useHistory()
 
     useEffect(() => {
 
@@ -28,11 +26,7 @@ const App = () => {
         }
 
         electronapi.actions.getStatus().then(status => {
-            if(status !== 'online' && status !== 'offline') {
-                history.push('/setup')
-            } else {
-                history.push('/dashboard')
-            }
+            console.log("Server Status: " + status)
             setServerStatus(status);
         })
 
@@ -47,25 +41,27 @@ const App = () => {
     },[])
 
     return (
-        <ServerStatusContext.Provider value={serverStatus}>
-            <div className="flex flex-col overflow-hidden h-screen">
-                <TitleBar />
-                <Switch>
-                    <Route path="/">
-                        <Initializing />
-                    </Route>
-                    <Route path="/dashboard">
-                        <Dashboard />
-                    </Route>
-                    <Route path="/settings">
-                        <Settings />
-                    </Route>
-                    <Route path="/setup">
-                        <Setup />
-                    </Route>
-                </Switch>
-            </div>
-        </ServerStatusContext.Provider>
+        <Router>
+            <ServerStatusContext.Provider value={serverStatus}>
+                <div className="flex flex-col overflow-hidden h-screen">
+                    <TitleBar />
+                    <Switch>
+                        <Route exact path="/">
+                            {serverStatus === '' ? <Initializing /> : <Redirect to="/dashboard" />}
+                        </Route>
+                        <Route path="/dashboard">
+                            {serverStatus === 'online' || serverStatus === 'offline' ? <Dashboard /> : <Redirect to="/setup" />}
+                        </Route>
+                        <Route path="/settings">
+                            {serverStatus === 'online' || serverStatus === 'offline' ? <Settings /> : <Redirect to="/setup" />}
+                        </Route>
+                        <Route path="/setup">
+                            {serverStatus !== 'online' && serverStatus !== 'offline' ? <Setup /> : <Redirect to="/dashboard" />}
+                        </Route>
+                    </Switch>
+                </div>
+            </ServerStatusContext.Provider>
+        </Router>
     )
 }
 
