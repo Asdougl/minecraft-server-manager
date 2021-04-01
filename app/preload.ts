@@ -27,8 +27,17 @@ const api: RendererAPI = {
         getStatus: () => {
             return ipcRenderer.invoke('server:status')
         },
-        startServer: () => {
-            return ipcRenderer.invoke('server:start')
+        getList: () => {
+            return ipcRenderer.invoke('server:list')
+        },
+        getServer: (serverid) => {
+            return ipcRenderer.invoke('server:get', serverid)
+        },
+        getCurrent: () => {
+            return ipcRenderer.invoke('server:current')
+        },
+        startServer: (serverid) => {
+            return ipcRenderer.invoke('server:start', serverid)
         },
         stopServer: () => {
             return ipcRenderer.invoke('server:stop')
@@ -36,14 +45,14 @@ const api: RendererAPI = {
         restartServer: () => {
             return ipcRenderer.invoke('server:restart')
         },
-        eulaAgree: (status) => {
-            return ipcRenderer.invoke('server:eula', status)
-        },
         openDirectory: () => {
             return ipcRenderer.invoke('files:open')
         },
         getLogs: () => {
             return ipcRenderer.invoke('server:logs')
+        },
+        createServer: (file, name) => {
+            return ipcRenderer.invoke('server:create', file, name)
         }
     },
     bind: {

@@ -5,10 +5,11 @@ import './renderer.css'
 
 // FontAwesome Configuration
 import { library } from '@fortawesome/fontawesome-svg-core'
-import { faCheck, faTimes, faPowerOff, faFolderOpen, faFolder, faFileAlt, faTerminal, faUndoAlt, faUsers, faSlidersH, faSyncAlt } from '@fortawesome/pro-solid-svg-icons'
+import { faCheck, faTimes, faPowerOff, faFolderOpen, faFolder, faFileAlt, faTerminal, faUndoAlt, faUsers, faSlidersH, faSyncAlt, faIdCard, faFile, faChevronLeft, faPlus, faCircle as fasCircle } from '@fortawesome/pro-solid-svg-icons'
 import { faCircle, faCheckCircle, faFileCheck } from '@fortawesome/pro-regular-svg-icons'
 import { faSpinnerThird } from '@fortawesome/pro-duotone-svg-icons'
-library.add( faCheck, faTimes, faPowerOff, faFolderOpen, faFolder, faFileAlt, faTerminal, faUndoAlt, faCircle, faCheckCircle, faUsers, faSlidersH, faSpinnerThird, faFileCheck, faSyncAlt )
+import { faJava } from '@fortawesome/free-brands-svg-icons'
+library.add( faCheck, faTimes, faPowerOff, faFolderOpen, faFolder, faFileAlt, faTerminal, faUndoAlt, faCircle, faCheckCircle, faUsers, faSlidersH, faSpinnerThird, faFileCheck, faSyncAlt, faIdCard, faJava, faFile, faChevronLeft, faPlus, fasCircle )
 
 let root = document.createElement('div')
 root.id = 'root'

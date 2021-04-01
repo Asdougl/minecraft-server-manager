@@ -1,8 +1,7 @@
 import * as fs from 'fs/promises'
 import { app } from 'electron'
 import path from 'path'
-import { spawn } from 'child_process'
-import { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { MinecraftServerConfig, MinecraftServer } from './MinecraftServer'
 
 export const checkForFolder = async () => {
     try {
@@ -28,13 +27,21 @@ export const createDirectory = async () => {
     }
 }
 
-export const directoryCheck = async () => {
+export const directoryCheck = async (nickname: string) => {
+
+    try {
+        const fsStat = await fs.stat(path.join(app.getAppPath(), 'minecraft-servers'))
+        if(!fsStat.isDirectory()) throw new Error("Not Directory")
+    } catch (error) {
+        await fs.mkdir(path.join(app.getAppPath(), 'minecraft-servers'))
+    }
+
     try {
         
-        const fsStat = await fs.stat(path.join(app.getAppPath(), 'minecraft'))
+        const fsStat = await fs.stat(path.join(app.getAppPath(), 'minecraft-servers', nickname))
         if(!fsStat.isDirectory()) throw new Error("Not Directory")
         
-        return true;
+        return nickname;
 
     } catch (error) {
 
@@ -42,8 +49,8 @@ export const directoryCheck = async () => {
 
         try {
             // Try Creating It
-            await fs.mkdir(path.join(app.getAppPath(), 'minecraft'))
-            return true;
+            await fs.mkdir(path.join(app.getAppPath(), 'minecraft-servers', nickname))
+            return nickname;
 
         } catch (error) {
             // This also failed, you are a failure.
@@ -121,27 +128,10 @@ export const eula = async (set?: boolean) => {
     }
 }
 
-interface ServerConfig {
-    onOut: (msg: string) => void;
-    onError: (msg: string) => void;
-    onClose: () => void;
-    onReady: () => void;
-    filename?: string;
-    gigabytes?: number;
-}
-
-interface MinecraftServerConfig {
-    filename?: string;
-    gigabytes?: number;
-    onOut: (msg: string) => void;
-    onError: (msg: string) => void;
-    onClose: () => void;
-}
-
 export const createMinecraftServer = async (config: MinecraftServerConfig): Promise<MinecraftServer> => {
     try {
         
-        await directoryCheck();
+        await directoryCheck(config.server.dir);
 
         const serverCheck = await checkForServer();
         if(!serverCheck) throw new Error("Server File Not Found")
@@ -151,92 +141,4 @@ export const createMinecraftServer = async (config: MinecraftServerConfig): Prom
     } catch (error) {
         throw error;
     }
-}
-
-export class MinecraftServer {
-
-    private child: ChildProcessWithoutNullStreams;
-
-    constructor(config: MinecraftServerConfig) {
-
-        let ram1 = '-Xmx2G', ram2 = '-Xms2G'
-        if(config.gigabytes) {
-            if(config.gigabytes >= 2 && config.gigabytes <= 8) {
-                ram1 = `-Xmx${Math.floor(config.gigabytes)}G`
-                ram2 = `-Xms${Math.floor(config.gigabytes)}G`
-            }
-        }
-
-        this.child = spawn('java', [ram1, ram2, '-jar', `${config.filename ? config.filename : 'server'}.jar`, 'nogui'], { cwd: path.join(app.getAppPath(), 'minecraft') })
-
-        this.child.stdout.on('data', config.onOut)
-        this.child.stderr.on('data', config.onError)
-        this.child.on('exit', config.onClose)
-
-        process.on('beforeExit', () => this.child.kill('SIGINT'));
-    }
-
-    public sendCommand = (command: string) => {
-        this.child.stdin.write(command + '\n');
-    }
-
-    public closeServer = (): Promise<void> => {
-        return new Promise((resolve, reject) => {
-            this.sendCommand('stop');
-
-            const tookTooLong = setTimeout(() => {
-                this.child.kill('SIGINT');
-            }, 5000)
-
-            this.child.on('error', err => {
-                reject(err)
-                clearTimeout(tookTooLong);
-                this.child.kill('SIGINT')
-            })
-
-            this.child.on('exit', () => {
-                clearTimeout(tookTooLong)
-                resolve();
-            })
-        })
-    }
-
-}
-
-export const startServer = ({ onOut, onError, onClose, onReady, filename, gigabytes }: ServerConfig) => {
-
-    let ram1 = '-Xmx2G', ram2 = '-Xms2G'
-    if(gigabytes) {
-        if(gigabytes >= 2 && gigabytes <= 8) {
-            ram1 = `-Xmx${Math.floor(gigabytes)}G`
-            ram2 = `-Xms${Math.floor(gigabytes)}G`
-        }
-    }
-
-    const child = spawn('java', [ram1, ram2, '-jar', `${filename || 'server'}.jar`, 'nogui'], { cwd: path.join(app.getAppPath(), 'minecraft') })
-
-    child.stdout.on('data', data => {
-        onOut(data.toString())
-    })
-
-    child.stderr.on('data', data => {
-        onError(data.toString())
-    })
-
-    child.on('error', err => {
-        onError(err.message)
-    })
-
-    const onExit = () => {
-        child.kill('SIGINT')
-    };
-
-    child.on('close', () => {
-        process.off('beforeExit', onExit)
-        onClose()
-    });
-
-    process.on('beforeExit', onExit)
-
-    return child;
 }

@@ -6,12 +6,14 @@ import electronapi from './electron'
 import Dashboard from './views/Dashboard'
 import Settings from './views/Settings'
 import Setup from './views/Setup'
-import { ServerStatus } from '../app/RendererAPI'
-import Initializing from './views/Initializing'
+import { ServerData, ServerStatus } from '../app/RendererAPI'
+import Manager from './views/Manager'
+import ServerStats from './components/ServerStats'
 
 const App = () => {
 
-    const [serverStatus, setServerStatus] = useState<ServerStatus | ''>('');
+    const [serverStatus, setServerStatus] = useState<ServerStatus>('offline');
+    const [activeServer, setActiveServer] = useState<ServerData | null>(null);
 
     useEffect(() => {
 
@@ -26,7 +28,6 @@ const App = () => {
         }
 
         electronapi.actions.getStatus().then(status => {
-            console.log("Server Status: " + status)
             setServerStatus(status);
         })
 
@@ -40,25 +41,39 @@ const App = () => {
 
     },[])
 
+    useEffect(() => {
+        console.log("SERVER STATUS: " + serverStatus)
+        if(serverStatus === 'online') {
+            electronapi.actions.getCurrent().then(srv => setActiveServer(srv || null))
+        } else {
+            setActiveServer(null)
+        }
+    },[serverStatus])
+
+    const checkStatus = () => {
+        electronapi.actions.getStatus().then(status => setServerStatus(status))
+    }
+
     return (
         <Router>
-            <ServerStatusContext.Provider value={serverStatus}>
+            <ServerStatusContext.Provider value={[serverStatus, checkStatus]}>
                 <div className="flex flex-col overflow-hidden h-screen">
                     <TitleBar />
                     <Switch>
                         <Route exact path="/">
-                            {serverStatus === '' ? <Initializing /> : <Redirect to="/dashboard" />}
+                            <Dashboard activeid={activeServer ? activeServer.id : null} />
                         </Route>
-                        <Route path="/dashboard">
-                            {serverStatus === 'online' || serverStatus === 'offline' ? <Dashboard /> : <Redirect to="/setup" />}
+                        <Route path="/manage/:serverid">
+                            <Manager />
                         </Route>
                         <Route path="/settings">
-                            {serverStatus === 'online' || serverStatus === 'offline' ? <Settings /> : <Redirect to="/setup" />}
+                            <Settings />
                         </Route>
                         <Route path="/setup">
-                            {serverStatus !== 'online' && serverStatus !== 'offline' ? <Setup /> : <Redirect to="/dashboard" />}
+                            <Setup />
                         </Route>
                     </Switch>
+                    {activeServer && <ServerStats server={activeServer} />}
                 </div>
             </ServerStatusContext.Provider>
         </Router>

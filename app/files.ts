@@ -4,8 +4,8 @@ import { app } from 'electron'
 
 export const openServerPath = () => {
     if(process.platform === 'win32') {
-        spawn('explorer', ['.'], { cwd: path.join(app.getAppPath(), 'minecraft') })
+        spawn('explorer', ['.'], { cwd: path.join(app.getAppPath(), 'minecraft-servers') })
     } else if(process.platform === 'darwin') {
-        spawn('open', ['.'], { cwd: path.join(app.getAppPath(), 'minecraft') })
+        spawn('open', ['.'], { cwd: path.join(app.getAppPath(), 'minecraft-servers') })
     }
 }

@@ -1,3 +1,5 @@
 /node_modules/
 /minecraft
+/minecraft-servers
 /.webpack
+.DS_Store

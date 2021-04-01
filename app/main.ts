@@ -1,17 +1,16 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import log from 'electron-log'
-
+import { promises as fs } from 'fs'
 import {
-    eula,
-    MinecraftServer,
     createMinecraftServer,
     directoryCheck,
-    eulaCheck,
-    checkForServer,
 } from './server'
 import { openServerPath } from './files'
-import { Log as ServerLog, parseLine } from './logs'
+import { MinecraftServer, ServerLog } from './MinecraftServer'
+import { ServerData, ServerStatus } from './RendererAPI'
+import Store from 'electron-store'
+import { v4 as uuidv4 } from 'uuid'
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
@@ -96,6 +95,33 @@ const sendNodeError = (error: Error) => {
     if(win) win.webContents.send('node-error', error);
 }
 
+/* ------| ELECTRON STORE |------ */
+
+interface StoreSchema {
+    servers: ServerData[];
+}
+
+const storage = new Store<StoreSchema>({
+    schema: {
+        servers: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: {
+                    id: { type: 'string' },
+                    name: { type: 'string' },
+                    dir: { type: 'string' },
+                    gamemode: { type: 'string' },
+                },
+                required: ['id', 'name', 'dir', 'gamemode'],
+            },
+            default: []
+        }   
+    }
+});
+
+// storage.set('servers', [])
+
 /* ------| WINDOW FUNCTIONS |------ */
 
 ipcMain.on('window:minimize', () => {
@@ -114,6 +140,10 @@ ipcMain.handle('window:status', () => {
     return win ? win.isFocused() : false;
 })
 
+const sendWindowEvent = (channel: string, data?: string) => {
+    if(win) win.webContents.send(channel, data)
+}
+
 
 /* ------| MINECRAFT SERVER |------ */
 
@@ -125,63 +155,75 @@ app.on('before-quit', async () => {
     if(server) await server.closeServer();
 })
 
+// Ensure there is a minecraft-servers folder
+fs.stat(path.join(app.getAppPath(), 'minecraft-servers'))
+.then(stat => {
+    if(!stat.isDirectory) {
+        fs.mkdir(path.join(app.getAppPath(), 'minecraft-servers'))
+    }
+})
+.catch(err => {
+    if(err.code === 'ENOENT') {
+        fs.mkdir(path.join(app.getAppPath(), 'minecraft-servers'))
+    }
+})
+
 // We need to:
 //  1) Check that the server folder exists
 //  2) Check that it contains a minecraft server
 //  3) Check that the eula has been agreed to
 
-ipcMain.handle('server:status', async () => {
-    // Check if server is running
+ipcMain.handle('server:status', (): ServerStatus => {
+    // Check if a Server is running
     if(server !== null) {
-        // Safe to assume its online
-        return 'online';
-    } else if(!directoryCheck()) {
-        return 'no-folder';
-    } else if(!checkForServer()) {
-        return 'no-server'
+        return 'online'
     } else {
-        const eula = await eulaCheck();
-
-        if(eula === 'invalid-eula' || eula === 'no-eula') return 'no-first-run'
-
-        if(eula === 'not-agreed') return 'eula-agree'
-
-        // Otherwise it must just be offline
-        return 'offline'
-
+        // Offline, but what type?
+        if(storage.get('servers').length) {
+            return 'offline'
+        } else {
+            return 'no-servers'
+        }
     }
 })
 
-ipcMain.handle('server:start', async () => {
+ipcMain.handle('server:list', (): ServerData[] => {
+    return storage.get('servers')
+})
+
+ipcMain.handle('server:get', (evt, serverid: string): ServerData | undefined => {
+    return storage.get('servers').find(srv => srv.id === serverid)
+})
+
+ipcMain.handle('server:current', (): ServerData | undefined => {
+    if(server) return server.getData();
+})
+
+ipcMain.handle('server:start', async (evt, serverid: string) => {
 
     try {
 
         if(server === null)  {
 
+            const allServers = storage.get('servers')
+            const active = allServers.find(srv => srv.id === serverid)
+            if(!active) throw new Error("Server of id " + serverid + " not found")
+
             if(win) win.webContents.send('server:pending');
 
             server = await createMinecraftServer({
-                onOut: msg => {
-                    const parsed = parseLine(msg);
-                    if(parsed) {
-                        if(parsed.event) {
-                            // fire events based on flags
-                            console.log(`Evt server:${parsed.event} Inbound`);
-                            if(win) win.webContents.send(`server:${parsed.event}`, parsed.eventData)
-                        }
-                        logs = [...logs, parsed];
-                        if(win) win.webContents.send('server:log', parsed);
-                    }
-                    log.info(msg);
-                },
-                onError: err => {
-                    log.error(err);
-                },
+                server: active,
                 onClose: () => {
-                    if(win) win.webContents.send('server:close')
+                    sendWindowEvent('server:close')
                     server = null;
+                },
+                onInit: () => {
+                    sendWindowEvent('server:initialized')
+                },
+                onEvent: (event, data) => {
+                    sendWindowEvent(`server:${event}`, data)
                 }
-            });
+            })
         }
 
         return 'success';
@@ -192,6 +234,7 @@ ipcMain.handle('server:start', async () => {
         return 'error';
     }
 })
+
 
 ipcMain.handle('server:stop', async () => {
     try {
@@ -214,12 +257,51 @@ ipcMain.handle('server:restart', () => {
     // TODO
 })
 
-ipcMain.handle('server:eula', (evt, status) => {
-    eula(status);
-})
-
 ipcMain.handle('server:logs', () => {
     return logs;
+})
+
+ipcMain.handle('server:create', async (evt, serverPath: string, name: string) => {
+    try {
+
+        const servers = storage.get('servers')
+
+        // 0a) Check name is valid
+        if(!/^[A-Za-z 0-9-_]+$/.test(name)) throw new Error("Invalid Server Name")
+
+        const dir = name.toLowerCase().replaceAll(' ', '-')
+
+        // 0b) Check name is unique
+        if(servers.find(srv => srv.name === name || srv.dir === name || srv.dir === dir || srv.name === dir)) throw new Error("Server Name already in use")
+        
+        // 1) Check for folder
+        await directoryCheck(dir);
+
+        // 2) Write File to Directory
+        console.log(serverPath, name)
+        await fs.copyFile(serverPath, path.join(app.getAppPath(), 'minecraft-servers', dir, 'server.jar'))
+
+        // 3) Run a EULA Check
+        await fs.writeFile(path.join(app.getAppPath(), 'minecraft-servers', dir, 'eula.txt'), 'eula=true');
+
+        // 4) Create Server Data
+        const srv: ServerData = {
+            id: uuidv4(),
+            name,
+            dir,
+            gamemode: 'survival'
+        }
+
+        // 4) Track in Storage
+        storage.set('servers', [...storage.get('servers'), srv])
+
+        return;
+
+    } catch (error) {
+        log.error(error)
+        sendNodeError(error)
+        return;
+    }
 })
 
 ipcMain.handle('files:open', () => {
