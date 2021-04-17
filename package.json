@@ -5,7 +5,8 @@
   "main": ".webpack/main/main.js",
   "scripts": {
     "start": "cross-env NODE_ENV=development webpack --mode development --config ./webpack/webpack.main.config.js && cross-env NODE_ENV=development webpack serve --hot --host localhost --config ./webpack/webpack.renderer.config.js --mode development",
-    "package": "cross-env NODE_ENV=production webpack --mode production --config ./webpack/webpack.main.config.js && cross-env NODE_ENV=production webpack --mode production --config ./webpack/webpack.renderer.config.js"
+    "package": "cross-env NODE_ENV=production webpack --mode production --config ./webpack/webpack.main.config.js && cross-env NODE_ENV=production webpack --mode production --config ./webpack/webpack.renderer.config.js",
+    "build": "npm run package && electron-builder"
   },
   "keywords": [],
   "author": "",
@@ -48,10 +49,16 @@
     "@types/react-router-dom": "^5.1.7",
     "@types/uuid": "^8.3.0",
     "dayjs": "^1.10.4",
+    "dot-properties": "^1.0.1",
     "electron-store": "^7.0.2",
+    "public-ip": "^4.0.3",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-router-dom": "^5.2.0",
     "uuid": "^3.4.0"
+  },
+  "build":{
+    "appId":"com.asdougl.minecraft-server-manager",
+    "productName":"Minecraft Server Manager"
   }
 }

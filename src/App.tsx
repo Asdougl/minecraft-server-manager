@@ -1,17 +1,21 @@
 import React, { useEffect, useState } from 'react'
 import { HashRouter as Router, Redirect, Route, Switch } from 'react-router-dom'
 import TitleBar from './components/TitleBar'
-import { ServerStatusContext } from './context/ServerStatus'
-import electronapi from './electron'
+import { CurrentServerContext } from './context/CurrentServerContext'
+import main from './electron'
 import Dashboard from './views/Dashboard'
 import Settings from './views/Settings'
+import Logs from './views/Logs'
 import Setup from './views/Setup'
-import { ServerData, ServerStatus } from '../app/RendererAPI'
 import Manager from './views/Manager'
 import ServerStats from './components/ServerStats'
+import { useSubscription } from './hooks/useSubscription'
 
 const App = () => {
 
+    const currentServer = useSubscription(main.servers.current)
+
+    /*
     const [serverStatus, setServerStatus] = useState<ServerStatus>('offline');
     const [activeServer, setActiveServer] = useState<ServerData | null>(null);
 
@@ -53,15 +57,16 @@ const App = () => {
     const checkStatus = () => {
         electronapi.actions.getStatus().then(status => setServerStatus(status))
     }
+    */
 
     return (
         <Router>
-            <ServerStatusContext.Provider value={[serverStatus, checkStatus]}>
+            <CurrentServerContext.Provider value={currentServer}>
                 <div className="flex flex-col overflow-hidden h-screen">
                     <TitleBar />
                     <Switch>
                         <Route exact path="/">
-                            <Dashboard activeid={activeServer ? activeServer.id : null} />
+                            <Dashboard activeid={currentServer ? currentServer.id : ''} />
                         </Route>
                         <Route path="/manage/:serverid">
                             <Manager />
@@ -72,10 +77,14 @@ const App = () => {
                         <Route path="/setup">
                             <Setup />
                         </Route>
+                        <Route path="/srvconsole/:serverid">
+                            <Logs />
+                        </Route>
+                        <Route path="*" children={<Redirect to="/" />} />
                     </Switch>
-                    {activeServer && <ServerStats server={activeServer} />}
+                    {currentServer && currentServer.state === 'online' && <ServerStats server={currentServer} />}
                 </div>
-            </ServerStatusContext.Provider>
+            </CurrentServerContext.Provider>
         </Router>
     )
 }

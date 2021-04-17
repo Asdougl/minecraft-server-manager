@@ -11,20 +11,18 @@ Prefix: `window:`
 
 
 ## Server Events
-Prefix: `server:`
+Prefix `server:`
 | Event                     | Description 
 |---------------------------|-------------------------
-|`server:close`             | Server has closed
 |`server:pending`           | Server has begun execution
-|`server:init`              | Server has begun initialization
-|`server:eula`              | Server requires EULA Agreement
-|`server:file`              | Server requires Server File
-|`server:run`               | Server requires first run
-|`server:started`           | Server has successfully started
+|`server:loading`           | Server is loading libraries
 |`server:dimension`         | Server is loading a dimension
-|`server:progress`          | Server has made progress loading a dimension
-|`server:error`             | Server encountered an error
+|`server:progress`          | Server has made progress on a dimension
+|`server:done`              | Server load is done
+|`server:error`             | Server encountered some error
 |`server:outdated`          | Bukkit/Spigot build is outdated
+|`server:stop`              | Server is closing
+|`server:closed`            | Server has closed
 
 
 ## Initialization Events

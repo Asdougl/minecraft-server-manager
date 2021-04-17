@@ -1,25 +1,33 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
-import log from 'electron-log'
-import { promises as fs } from 'fs'
-import {
-    createMinecraftServer,
-    directoryCheck,
-} from './server'
-import { openServerPath } from './files'
-import { MinecraftServer, ServerLog } from './MinecraftServer'
-import { ServerData, ServerStatus } from './RendererAPI'
-import Store from 'electron-store'
-import { v4 as uuidv4 } from 'uuid'
+import { promises as fs, existsSync, mkdirSync } from 'fs'
+import { MinecraftServer, createMinecraftServer } from './MinecraftServer'
+import { LoadState, LogEvents, ServerData, ServerInfo } from './types'
+import { v4 as uuid } from 'uuid'
+import publicip from 'public-ip'
+import { getCurrent, getServer, getServerList, rebuildServers, startServer } from './servers'
+import { openServerPath } from './utils'
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
-const createWindow = (onClose: () => void) => {
+
+/*
+    # CREATE WINDOW
+======================================================= */
+
+interface CreateWindowOptions {
+    onClose: () => void;
+    route?: string;
+    height?: number;
+    width?: number;
+}
+
+const createWindow = ({ onClose, route, height, width }: CreateWindowOptions) => {
 
     // Create Window Object
     const window = new BrowserWindow({
-        height: 600,
-        width: 400,
+        height: height || 600,
+        width: width || 400,
         frame: false,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
@@ -32,9 +40,9 @@ const createWindow = (onClose: () => void) => {
     // Process Window Location
     let winLocation: string;
     if(IS_DEV) {
-        winLocation = "http://localhost:8080/index.html"
+        winLocation = route ? `http://localhost:8080/#/${route}` : "http://localhost:8080/"
     } else {
-        winLocation = "file://" + path.join(__dirname, "../renderer/index.html")
+        winLocation = "file://" + path.join(__dirname, route ? `http://localhost:8080/#/${route}` : "../renderer/")
     }
     window.loadURL(winLocation)
 
@@ -51,27 +59,59 @@ const createWindow = (onClose: () => void) => {
     })
 
     window.on('focus', () => {
-        window.webContents.send("window:focus")
+        window.webContents.send("window:focus", true)
     })
 
     window.on('blur', () => {
-        window.webContents.send('window:blur')
+        window.webContents.send('window:focus', false)
     })
 
     return window;
 
 }
 
+ipcMain.on('window:minimize', (evt) => {
+    // if(win) win.minimize()
+    BrowserWindow.getFocusedWindow()?.minimize();
+})
+
+ipcMain.on('window:maximize', () => {
+    // if(win) win.isMaximized() ? win.unmaximize() : win.maximize()
+    const curr = BrowserWindow.getFocusedWindow()
+    if(curr) {
+        curr.isMaximized() ? curr.unmaximize() : curr.maximize();
+    }
+})
+
+ipcMain.on('window:close', () => {
+    // if(win) win.close()
+    BrowserWindow.getFocusedWindow()?.close();
+})
+
+ipcMain.handle('window:focus', () => {
+    const curr = BrowserWindow.getFocusedWindow()
+    return curr ? curr.isFocused() : false;
+})
+
+
+/*
+    # WINDOWS
+======================================================= */
+
 // Track Window Status and Handle Window with this
-let win: BrowserWindow | null = null;
+interface WinMap {
+    [id: string]: BrowserWindow;
+}
+
+const winmap: WinMap = {}
 
 // Handle Window Focus
 const focusWindow = () => {
-    if(win) {
-        if(win.isMinimized()) win.restore()
-        win.focus();
+    if(winmap['main']) {
+        if(winmap['main'].isMinimized()) winmap['main'].restore()
+        winmap['main'].focus();
     } else {
-        win = createWindow(() => win = null)
+        winmap['main'] = createWindow({ onClose: () => delete winmap['main']})
     }
 }
 
@@ -86,224 +126,156 @@ if(gotLock === false) {
 }
 
 // Handle App Events
-app.on('ready', () => win = createWindow(() => win = null))
+app.on('ready', () => winmap['main'] = createWindow({ onClose: () => delete winmap['main'] }))
 app.on('window-all-closed', () => app.quit())
 app.on('activate', focusWindow)
 
 // Node Error Handler
-const sendNodeError = (error: Error) => {
-    if(win) win.webContents.send('node-error', error);
+const broadcast = (channel: string, ...args: any[]) => {
+    console.log("Having a little broadcast here... ", channel, ...args);
+    for(const id in winmap) {
+        winmap[id].webContents.send(channel, ...args);
+    }
 }
 
-/* ------| ELECTRON STORE |------ */
-
-interface StoreSchema {
-    servers: ServerData[];
-}
-
-const storage = new Store<StoreSchema>({
-    schema: {
-        servers: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    id: { type: 'string' },
-                    name: { type: 'string' },
-                    dir: { type: 'string' },
-                    gamemode: { type: 'string' },
-                },
-                required: ['id', 'name', 'dir', 'gamemode'],
-            },
-            default: []
-        }   
-    }
-});
-
-// storage.set('servers', [])
-
-/* ------| WINDOW FUNCTIONS |------ */
-
-ipcMain.on('window:minimize', () => {
-    if(win) win.minimize()
-})
-
-ipcMain.on('window:maximize', () => {
-    if(win) win.isMaximized() ? win.unmaximize() : win.maximize()
-})
-
-ipcMain.on('window:close', () => {
-    if(win) win.close()
-})
-
-ipcMain.handle('window:status', () => {
-    return win ? win.isFocused() : false;
-})
-
-const sendWindowEvent = (channel: string, data?: string) => {
-    if(win) win.webContents.send(channel, data)
-}
-
-
-/* ------| MINECRAFT SERVER |------ */
-
-let server: MinecraftServer | null = null;
-
-let logs: ServerLog[] = [];
-
-app.on('before-quit', async () => {
-    if(server) await server.closeServer();
-})
-
-// Ensure there is a minecraft-servers folder
-fs.stat(path.join(app.getAppPath(), 'minecraft-servers'))
-.then(stat => {
-    if(!stat.isDirectory) {
-        fs.mkdir(path.join(app.getAppPath(), 'minecraft-servers'))
-    }
-})
-.catch(err => {
-    if(err.code === 'ENOENT') {
-        fs.mkdir(path.join(app.getAppPath(), 'minecraft-servers'))
-    }
-})
-
-// We need to:
-//  1) Check that the server folder exists
-//  2) Check that it contains a minecraft server
-//  3) Check that the eula has been agreed to
-
-ipcMain.handle('server:status', (): ServerStatus => {
-    // Check if a Server is running
-    if(server !== null) {
-        return 'online'
+const openWindow = (id: string, winconfig: CreateWindowOptions) => {
+    if(winmap[id]) {
+        winmap[id].focus();
     } else {
-        // Offline, but what type?
-        if(storage.get('servers').length) {
-            return 'offline'
-        } else {
-            return 'no-servers'
-        }
+        const window = createWindow({ ...winconfig, onClose: () => delete winmap[id]})
+        winmap[id] = window;
+        window.focus();
     }
-})
+}
 
-ipcMain.handle('server:list', (): ServerData[] => {
-    return storage.get('servers')
-})
 
-ipcMain.handle('server:get', (evt, serverid: string): ServerData | undefined => {
-    return storage.get('servers').find(srv => srv.id === serverid)
-})
+/*
+    # APPLICATION API
+    track where the app is at int erms of starting up
+======================================================= */
 
-ipcMain.handle('server:current', (): ServerData | undefined => {
-    if(server) return server.getData();
-})
+type ApplicationState = 'init' | 'loading' | 'active'
 
-ipcMain.handle('server:start', async (evt, serverid: string) => {
+let appState: ApplicationState = 'init';
 
+// State Hook
+ipcMain.handle('application:state', () => appState)
+
+const changeApplicationState = (newstate: ApplicationState) => {
+    appState = newstate;
+    broadcast('application:state', newstate)
+}
+
+// Public IP Action
+ipcMain.handle('application:public-ip', async () => {
     try {
-
-        if(server === null)  {
-
-            const allServers = storage.get('servers')
-            const active = allServers.find(srv => srv.id === serverid)
-            if(!active) throw new Error("Server of id " + serverid + " not found")
-
-            if(win) win.webContents.send('server:pending');
-
-            server = await createMinecraftServer({
-                server: active,
-                onClose: () => {
-                    sendWindowEvent('server:close')
-                    server = null;
-                },
-                onInit: () => {
-                    sendWindowEvent('server:initialized')
-                },
-                onEvent: (event, data) => {
-                    sendWindowEvent(`server:${event}`, data)
-                }
-            })
-        }
-
-        return 'success';
-
+        return await publicip.v4();
     } catch (error) {
-        log.error(error)
-        sendNodeError(error);
-        return 'error';
+        return '';
     }
 })
 
 
-ipcMain.handle('server:stop', async () => {
-    try {
-        
-        if(server) {
-            await server.closeServer()
-            logs = [];
-        }
+/*
+    # MINECRAFT SERVERS
+    track the minecraft servers
+======================================================= */
 
-        return true;
+rebuildServers(broadcast);
 
-    } catch (error) {
-        log.error(error)
-        sendNodeError(error)
-        return false;
+ipcMain.handle('servers:list', (evt, newserver?: ServerInfo) => {
+    if(newserver) {
+        // Add the new server
     }
+    return getServerList();
 })
 
-ipcMain.handle('server:restart', () => {
+ipcMain.handle('servers:get', (evt, serverid: string) => {
+    const server = getServer(serverid)
+    return server ? server.getServerInfo() : null;
+})
+
+ipcMain.handle('servers:current', () => {
+    const curr = getCurrent();
+    return curr ? curr.getServerInfo() : null;
+})
+
+ipcMain.handle('servers:directory', (evt, serverid: string) => {
+    const srv = getServer(serverid)
+    if(srv) openServerPath(srv.getServerInfo().dir)
+})
+
+ipcMain.handle('servers:create', (evt, config: ServerInfo) => {
     // TODO
 })
 
-ipcMain.handle('server:logs', () => {
-    return logs;
+ipcMain.handle('servers:edit', (evt, id: string, config: ServerInfo) => {
+    // TODO
 })
 
-ipcMain.handle('server:create', async (evt, serverPath: string, name: string) => {
-    try {
-
-        const servers = storage.get('servers')
-
-        // 0a) Check name is valid
-        if(!/^[A-Za-z 0-9-_]+$/.test(name)) throw new Error("Invalid Server Name")
-
-        const dir = name.toLowerCase().replaceAll(' ', '-')
-
-        // 0b) Check name is unique
-        if(servers.find(srv => srv.name === name || srv.dir === name || srv.dir === dir || srv.name === dir)) throw new Error("Server Name already in use")
-        
-        // 1) Check for folder
-        await directoryCheck(dir);
-
-        // 2) Write File to Directory
-        console.log(serverPath, name)
-        await fs.copyFile(serverPath, path.join(app.getAppPath(), 'minecraft-servers', dir, 'server.jar'))
-
-        // 3) Run a EULA Check
-        await fs.writeFile(path.join(app.getAppPath(), 'minecraft-servers', dir, 'eula.txt'), 'eula=true');
-
-        // 4) Create Server Data
-        const srv: ServerData = {
-            id: uuidv4(),
-            name,
-            dir,
-            gamemode: 'survival'
-        }
-
-        // 4) Track in Storage
-        storage.set('servers', [...storage.get('servers'), srv])
-
-        return;
-
-    } catch (error) {
-        log.error(error)
-        sendNodeError(error)
-        return;
+ipcMain.handle('servers:properties-edit', (evt, id: string, property: string, value: string) => {
+    // TODO
+    const srv = getServer(id)
+    if(srv) {
+        srv.setProperty(property, value)
     }
 })
 
-ipcMain.handle('files:open', () => {
-    openServerPath()
+
+/*
+    # CURRENT MINECRAFT SERVER
+    the current active minecraft server
+======================================================= */
+
+ipcMain.handle('current:start', (evt, serverid: string) => {
+    // Set the current server as a found server
+    // Start that server
+    return startServer(serverid);
+})
+
+ipcMain.handle('current:stop', () => {
+    // Stop the current running server if there is one
+    const curr = getCurrent();
+    if(curr) {
+        curr.stop();
+    }
+})
+
+ipcMain.handle('current:restart', () => {
+    // If there is a current server, restart it
+    const curr = getCurrent();
+    if(curr) {
+        curr.restart()
+    }
+})
+
+ipcMain.handle('current:status', () => {
+    // If there is a current server, return its status
+    const curr = getCurrent();
+    return curr ? curr.getStatus() : 'offline';
+})
+
+ipcMain.handle('current:loading', (): LoadState | undefined => {
+    const curr = getCurrent();
+    return curr ? { state: 'pending' } : undefined;
+})
+
+ipcMain.handle('current:logs', () => {
+    // If there is a current server, return is log[]
+    const curr = getCurrent()
+    if(curr) {
+        return curr.getLogs();
+    }
+})
+
+ipcMain.handle('current:log-window', () => {
+    // If there is a current server, open a window contianing its log[]
+})
+
+ipcMain.handle('current:command', (evt, command: string) => {
+    // If there is a current server, send a command to it
+    const curr = getCurrent();
+    if(curr) {
+        return curr.cmd(command);
+    }
 })

@@ -7,14 +7,15 @@ interface Props {
     placeholder?: string;
     maxLength?: number;
     error?: boolean;
+    className?: string;
 }
 
-const Input = ({ value, onChange, disabled, placeholder, maxLength, error }: Props) => {
+const Input = ({ value, onChange, disabled, placeholder, maxLength, error, className }: Props) => {
     return (
         <input 
             value={value}
             type="text"
-            className={`w-full px-2 rounded-lg border-2 ${!error ? 'border-gray-300' : 'border-red-500'} focus:outline-none focus:ring focus:ring-blue-400 bg-transparent`}
+            className={`w-full px-2 rounded-lg border-2 ${!error ? 'border-gray-300' : 'border-red-500'} focus:outline-none focus:ring focus:ring-blue-400 bg-transparent ${className}`}
             disabled={disabled}
             onChange={onChange && (e => onChange(e.currentTarget.value))}
             placeholder={placeholder}

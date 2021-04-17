@@ -6,9 +6,10 @@ import main from '../electron'
 import Input from '../components/util/Input'
 import FileUpload from '../components/util/FileUpload'
 import Button from '../components/util/Button'
-import { ServerStatusContext } from '../context/ServerStatus'
-import { ServerData } from '../../app/RendererAPI'
+import { CurrentServerContext } from '../context/CurrentServerContext'
+import { ServerData, ServerInfo } from '../../app/types'
 import ViewHeader from '../components/util/ViewHeader'
+import { useSubscription } from '../hooks/useSubscription'
 
 interface Props {
     
@@ -16,7 +17,7 @@ interface Props {
 
 const Setup = (props: Props) => {
 
-    const [status, checkStatus] = useContext(ServerStatusContext)
+    const currentServer = useContext(CurrentServerContext)
     const history = useHistory()
 
     const [name, setName] = useState('')
@@ -24,12 +25,13 @@ const Setup = (props: Props) => {
     const [agree, setAgree] = useState(false)
     const [ready, setReady] = useState(false)
     const [pending, setPending] = useState(false);
-    const [servers, setServers] = useState<ServerData[]>([])
+    const servers = useSubscription(main.servers.list)
 
     const [validName, setValidName] = useState(false);
+
     useEffect(() => {
         const potentialDir = name.toLowerCase().replace(' ', '-')
-        setValidName(name ? (!servers.find(srv => srv.name === name || srv.dir === name || srv.dir === potentialDir || srv.name === potentialDir) && /^[A-Za-z 0-9-_]+$/.test(name)) : true)
+        setValidName(name ? (servers ? !servers.find(srv => srv.name === name || srv.dir === name || srv.dir === potentialDir || srv.name === potentialDir) && /^[A-Za-z 0-9-_]+$/.test(name) : false) : true)
     },[name, servers])
 
     useEffect(() => {
@@ -40,17 +42,10 @@ const Setup = (props: Props) => {
 
     },[name, file, agree])
 
-    useEffect(() => {
-        main.actions.getList().then(list => setServers(list))
-    },[])
-
     const createServer = () => {
         if(file && agree) {
             setPending(true);
-            main.actions.createServer(file.path, name).then(() => {
-                checkStatus();
-                history.push('/');
-            })
+            // ADD TO SERVER!!!
             
         }
     }

@@ -5,11 +5,12 @@ import { Link } from 'react-router-dom'
 interface Props {
     title: string;
     back?: string;
+    className?: string;
 }
 
-const ViewHeader: FunctionComponent<Props> = ({ title, back, children }) => {
+const ViewHeader: FunctionComponent<Props> = ({ title, back, children, className }) => {
     return (
-        <h1 className="text-4xl font-bold flex justify-between items-center mb-4">
+        <h1 className={`text-4xl font-bold flex justify-between items-center mb-4 ${className}`}>
             {back ? 
                 <div className="flex gap-2 items-center">
                     <Link to="/" className="text-blue-500 fill-current hover:opacity-70">

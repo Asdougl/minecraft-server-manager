@@ -2,4 +2,5 @@
 /minecraft
 /minecraft-servers
 /.webpack
+/dist
 .DS_Store
