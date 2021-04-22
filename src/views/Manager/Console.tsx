@@ -26,7 +26,7 @@ const Console = ({ logs, command }: Props) => {
     },[logs])
 
     return (
-        <div className="h-64 flex flex-col overflow-hidden">
+        <div className="flex flex-col h-full">
             <ul className="flex-grow overflow-y-scroll overflow-x-hidden">
                 {logs ? logs.map(log => (
                     <li
