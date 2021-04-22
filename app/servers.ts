@@ -3,7 +3,8 @@ import { app } from 'electron'
 import { createMinecraftServer, MinecraftServer } from './MinecraftServer'
 import { promises as fs } from 'fs'
 import path from 'path'
-import { validServerData } from './types'
+import { Broadcaster, ServerData, validServerData, ServerPing } from './types'
+import net from 'net'
 
 interface ServerMap {
     [id: string]: MinecraftServer
@@ -30,7 +31,7 @@ const ensureFolder = async (folder: string) => {
     }
 }
 
-export const rebuildServers = async (broadcast: (channel: string, ...args: any[]) => void) => {
+export const rebuildServers = async (broadcast: Broadcaster) => {
     try {
 
         const folder = path.join(app.getAppPath(), 'minecraft-servers')
@@ -42,7 +43,6 @@ export const rebuildServers = async (broadcast: (channel: string, ...args: any[]
         // Step 2 -- Find all subfolders
         const contents = await fs.readdir(folder, { withFileTypes: true })
         for (const child of contents) {
-            console.log("POTENTIAL:", child);
             if(child.isDirectory()) {
                 // Check for a file called server.config.js
                 try {
@@ -53,8 +53,7 @@ export const rebuildServers = async (broadcast: (channel: string, ...args: any[]
 
                     if(validServerData(config)) {
                         // Add to srvmap
-                        const id = uuid();
-                        const server = await createMinecraftServer(id, { 
+                        const server = await createMinecraftServer(config.id, { 
                             data: config, 
                             dir: child.name,
                             broadcast,
@@ -63,12 +62,11 @@ export const rebuildServers = async (broadcast: (channel: string, ...args: any[]
                             },
                             getCurrent: () => current ? current.getId() : ''
                         });
-                        if(server) srvmap[id] = server;
+                        if(server) srvmap[config.id] = server;
                     }
 
                 } catch (error) {
-                    console.log(`Folder ${child.name} is an invalid server. Why:`)
-                    console.log(error);
+                    // should be right.
                 }
                 
             }
@@ -76,8 +74,6 @@ export const rebuildServers = async (broadcast: (channel: string, ...args: any[]
 
         // Step 3 -- Assign the Server Map
         servers = srvmap;
-
-        console.log(servers);
 
     } catch (error) {
         // Well then...
@@ -116,3 +112,130 @@ export const startServer = (serverid: string) => {
         return false;
     }
 }
+
+interface CreateServerOptions {
+    name: string;
+    dir?: string;
+    jarpath: string;
+    broadcast: Broadcaster;
+}
+
+export const serverFolderExists = async (name: string) => {
+    try {
+        
+        const contents = await fs.readdir(path.join(app.getAppPath(), 'minecraft-servers'), { withFileTypes: true });
+
+        const existing = contents.find(entity => entity.name === name && entity.isDirectory())
+
+        return existing !== undefined;
+
+    } catch (error) {
+        throw error;
+    }
+}
+
+export const createServer = async ({ name, dir, jarpath, broadcast }: CreateServerOptions) => {
+    // Step 1 - Create the subfolder
+
+    try {
+
+        let foldername = dir;
+        if(!foldername) {
+            foldername = name.toLowerCase().replace(/[^a-z0-9-_ ]/g, '').replace(/ /g, '-');
+        }
+        
+        const exists = await serverFolderExists(foldername)
+        if(exists) {
+            // eh oh
+            foldername += '_' + Math.random().toString(36).substr(2, 7);
+            const tryagain = await serverFolderExists(foldername);
+
+            if(tryagain) throw new Error("Try a better name cunt");
+
+        }
+
+        // We now have a valid name! Make it!
+        const folderpath = path.join(app.getAppPath(), 'minecraft-servers', foldername)
+
+        await fs.mkdir(folderpath);
+
+        // Add the Java File!
+        await fs.copyFile(jarpath, path.join(folderpath, 'server.jar'));
+
+        // Agree to the EULA
+        await fs.writeFile(path.join(folderpath, 'eula.txt'), 'eula=true');
+
+        const managerConfig: ServerData = {
+            id: uuid(),
+            name: foldername,
+            title: name,
+            activeWorld: 'world',
+            worlds: [
+                {
+                    name: 'world',
+                    title: 'World'
+                }
+            ]
+        }
+
+        // Write the config file
+        await fs.writeFile(path.join(folderpath, 'manager.config.json'), JSON.stringify(managerConfig))
+
+        // Add it to the srvmap
+
+        const server = await createMinecraftServer(managerConfig.id, {
+            data: managerConfig,
+            dir: foldername,
+            broadcast,
+            onClose: () => {
+                current = null;
+            },
+            getCurrent: () => current ? current.getId() : ''
+        })
+        if(server) {
+            servers[managerConfig.id] = server;
+        }
+        
+
+    } catch (error) {
+        throw error;
+    }
+
+}
+
+export const pingCurrent = (): Promise<ServerPing> => new Promise((resolve, reject) => {
+    let sentAt = Date.now();
+    const client = net.connect(25565, 'localhost', () => {
+        const buf = Buffer.from([0xFE, 0x01])
+        client.write(buf);
+        sentAt = Date.now()
+    })
+
+    let ping: ServerPing | null = null;
+
+    client.on('data', data => {
+        if(data !== null && data.toString() !== '') {
+            const info = data.toString().split('\x00\x00\x00')
+
+            ping = {
+                version: info[2].replace(/\u0000/g, ''),
+                description: info[3].replace(/\u0000/g, ''),
+                players: +info[4].replace(/\u0000/g, ''),
+                max: +info[5].replace(/\u0000/g, ''),
+                ping: Date.now() - sentAt,
+            }
+        }
+    })
+
+    client.on('error', err => {
+        reject(err)
+    })
+
+    client.on('close', () => {
+        if(ping) {
+            resolve(ping)
+        } else {
+            reject(new Error("Ping Unsuccessful"))
+        }
+    })
+})

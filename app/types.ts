@@ -33,14 +33,39 @@ export interface ServerInfo {
     worlds: World[];
     activeWorld: string;
     properties: Tree;
+    changes: boolean;
+}
+
+/* Info Required to Create a Server */
+export interface ServerCreateInfo {
+    name: string;
+    jar: string;
 }
 
 /* User information from usercache.json */
 export interface MinecraftUser {
     uuid: string;
     name: string;
-    expiresOn: string;
+    expiresOn?: string;
 }
+
+/* A record of a backup - {world_name}.{timestamp}.zip */
+export interface WorldBackup {
+    id: string;
+    world_name: string;
+    timestamp: number;
+    filename: string;
+}
+
+export interface WorldBackupMap {
+    [worldname: string]: WorldBackup[];
+}
+
+export const isMinecraftUser = (test: any): test is MinecraftUser => {
+    return (typeof test === 'object' && typeof test.uuid === 'string' && typeof test.name === 'string' && typeof test.expiresOn === 'string')
+}
+
+export type Broadcaster = (channel: string, ...args: any[]) => void;
 
 export const validServerData = (test: any): test is ServerData => {
     if(typeof test !== 'object' || typeof test.name !== 'string' || typeof test.title !== 'string' || typeof test.activeWorld !== 'string' || typeof test.worlds !== 'object' || !Array.isArray(test.worlds)) return false;
@@ -110,9 +135,12 @@ export interface API {
         get: ConditionalHook<string, ServerInfo | null>;
         current: Hook<ServerInfo | null>;
         directory: Task<string>;
-        create: Creator<ServerInfo>;
+        create: Creator<ServerCreateInfo>;
         edit: Mutator<string, Pick<ServerInfo, 'name'>>;
         setProperty: Mutator<{ id: string, property: string }, string>;
+        addWorld: Mutator<string, string>, 
+        backups: ConditionalHook<string, WorldBackupMap | null>
+        createBackup: Mutator<string, string>
     },
     current: {
         start: Task<string>;
@@ -123,8 +151,20 @@ export interface API {
         logs: Hook<ServerLog[]>;
         logWindow: Action;
         command: Task<string>;
+        ping: Hook<ServerPing | undefined>;
+        // players: Hook<MinecraftUser[] | null>;
+        players: Hook<MinecraftUser[]>;
     },
 }
+
+export interface ServerPing {
+    version: string;
+    description: string;
+    players: number;
+    max: number;
+    ping: number;
+}
+
 /*
 export default interface RendererAPI {
     window: {

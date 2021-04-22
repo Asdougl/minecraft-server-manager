@@ -1,11 +1,13 @@
 import { spawn, ChildProcessWithoutNullStreams } from "child_process";
-import { LogEvents, LogStatus, ServerData, ServerLog, ServerStatus, LoadingStatus, ServerInfo, LoadState } from "./types";
+import { LogEvents, LogStatus, ServerData, ServerLog, ServerStatus, LoadingStatus, ServerInfo, LoadState, MinecraftUser, isMinecraftUser, World, WorldBackup, WorldBackupMap } from "./types";
 import path from 'path'
 import { app } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { Tree } from "dot-properties";
 import { promises as fs } from 'fs'
 import { parse as parseProps, stringify as stringifyProps } from 'dot-properties'
+import { archiveDirectory } from './utils'
+import { pingCurrent } from "./servers";
 
 const isStatus = (test: string): test is LogStatus => {
     return ['INFO', 'WARN', 'ERROR'].includes(test);
@@ -28,6 +30,10 @@ class MinecraftProcess {
     // Internal Data
     private child: ChildProcessWithoutNullStreams;
     private lastDim: string = '';
+
+    // For Slient Command
+    private silentLog: ((log: ServerLog) => void) | null = null; 
+    private silentErr: ((err: string) => void) | null = null;
 
     // Event Callbacks
     private onLog: MinecraftProcessConfig['onLog'];
@@ -127,7 +133,12 @@ class MinecraftProcess {
                 }
             }
 
-            this.onLog(line);
+            if(this.silentLog) {
+                this.silentLog(line);
+                this.silentLog = null;
+            } else {
+                this.onLog(line);
+            }
 
             return;
         }
@@ -141,6 +152,11 @@ class MinecraftProcess {
     }
 
     private processStderr(line: string) {
+        if(this.silentErr) {
+            this.silentErr(line)
+            this.silentErr = null;
+        }
+
         if(line.includes('*** Error, this build is outdated ***')) {
             this.onLoading({ state: 'outdated' });
         } else {
@@ -176,6 +192,19 @@ class MinecraftProcess {
         })
     }
 
+    public silentCommand(command: string): Promise<ServerLog> {
+        return new Promise((resolve, reject) => {
+            this.silentLog = (log) => {
+                resolve(log);
+            }
+            this.silentErr = (err) => {
+                reject(err)
+            }
+
+            this.child.stdin.write(command + '\n');
+        })
+    }
+
 }
 
 interface ServerEventLog {
@@ -197,12 +226,18 @@ export class MinecraftServer {
     private config: ServerData;
     private server: MinecraftProcess | null = null;
     private serverState: ServerStatus = 'offline';
-    private properties: Tree = {};
+    private properties: Tree | null = null;
+    private usercache: MinecraftUser[] = [];
+    private backups: WorldBackupMap = {};
     private dir: string;
     private id: string;
+    private hasChanges: boolean = false;
 
     private logs: ServerLog[] = []
     private events: ServerEventLog[] = []
+
+    private pingInterval: NodeJS.Timeout | null = null;
+    private nextLineListeners: ((line: string) => void)[] = [];
 
     private broadcast: MinecraftServerConfig['broadcast']
     private onClose: MinecraftServerConfig['onClose']
@@ -212,11 +247,33 @@ export class MinecraftServer {
 
         this.config = data;
         this.broadcast = broadcast;
-        console.log(this.broadcast.toString());
         this.dir = dir;
         this.id = id;
 
-        this.fetchProperties()
+        // Perform Async Actions
+        Promise.all([
+            this.fetchProperties(),
+            this.fetchUsercache(),
+            this.fetchBackups(),
+        ]).then(([ properties, usercache, backups ]) => {
+            // Assignment
+            this.usercache = usercache;
+            this.properties = properties;
+
+            // Check Properties for world
+            if(this.properties && this.properties.world && typeof this.properties.world === 'string') {
+                this.setConfig('activeWorld', this.properties.world);
+            }
+
+            // Assign yer backups
+            this.backups = backups;
+            console.log(`BACKUPS: ${this.config.name}`, this.backups)
+            this.broadcast(`server:backups:${this.id}`, this.backups)
+
+            // Finally broacast your new discoveries
+            this.broadcastInfo();
+
+        })
 
         this.onClose = onClose;
         this.getCurrent = getCurrent;
@@ -224,6 +281,11 @@ export class MinecraftServer {
     }
 
     /* Private Methods */
+
+    private broadcastInfo = () => {
+        this.broadcast(`servers:get:${this.id}`, this.getServerInfo())
+        if(this.isCurrent()) this.broadcast('servers:current', this.getServerInfo())
+    }
 
     private async fetchProperties() {
 
@@ -237,14 +299,15 @@ export class MinecraftServer {
 
             const propsraw = await fs.readFile(propdir)
 
-            this.properties = parseProps(propsraw.toString());
+            const properties = parseProps(propsraw.toString());
 
             // Find Key Datapoints
-            if(this.properties.world && typeof this.properties.world === 'string') {
-                this.setConfig('activeWorld', this.properties.world);
-            }
+            // if(this.properties.world && typeof this.properties.world === 'string') {
+            //     this.setConfig('activeWorld', this.properties.world);
+            // }
 
             // return parseProps(propsraw.toString())
+            return properties;
             
         } catch (error) {
             return null;
@@ -252,10 +315,70 @@ export class MinecraftServer {
         
     }
 
+    private async fetchUsercache() {
+        const userdatadir = path.join(app.getAppPath(), 'minecraft-servers', this.dir, 'usercache.json')
+
+        try {
+            
+            const raw = await fs.readFile(userdatadir);
+
+            const potentialusers = JSON.parse(raw.toString())
+
+            if(typeof potentialusers !== 'object' || !Array.isArray(potentialusers)) throw new Error("Invalid Usercache array");
+
+            let users: MinecraftUser[] = [];
+            
+            for(const potential of potentialusers) {
+                if(isMinecraftUser(potential)) users = [...users, potential];
+            }
+
+            return users;
+
+        } catch (error) {
+            return [];
+        }
+
+    }
+
+    private async fetchBackups() {
+        try {
+            
+            const files = await fs.readdir(path.join(app.getAppPath(), 'minecraft-servers', this.dir, 'server-backups'), { withFileTypes: true })
+
+            let backups: WorldBackupMap = {};
+            this.config.worlds.forEach(world => backups[world.name] = []);
+            console.log(files);
+            for(const file of files) {
+                if(file.isFile()) {
+                    const filenamematch = file.name.match(/([a-z0-9-_]+)\.(\d+)\.zip/);
+                    if(filenamematch) {
+                        const [, world_name, timestamp] = filenamematch;
+                        if(backups[world_name]) {
+                            backups[world_name] = [...backups[world_name], {
+                                id: uuidv4(),
+                                world_name: world_name,
+                                timestamp: +timestamp,
+                                filename: file.name,
+                            }]
+                        }
+                        
+                    }
+                }
+            }
+
+            return backups;
+
+        } catch (error) {
+            return {};
+        }
+    }
+
     private writeProperties() {
         const propdir = path.join(app.getAppPath(), 'minecraft-servers', this.dir, 'server.properties')
+
+        if(this.serverState === 'online') this.hasChanges = true;
         
-        fs.writeFile(propdir, stringifyProps(this.properties))
+        fs.writeFile(propdir, stringifyProps(this.properties || {}))
             .then(() => this.broadcast(`servers:get:${this.id}`, this.getServerInfo()))
             .catch((error) => console.log("the big oof\\", error.message))
 
@@ -284,12 +407,17 @@ export class MinecraftServer {
 
     private handleLog = (log: ServerLog) => {
         this.logs = [...this.logs, log]
+        this.broadcast('current:logs', this.logs);
     }
 
     private stateChange = (state: ServerStatus) => {
+        if(this.serverState === 'online' && state !== 'online') this.hasChanges = false;
         this.serverState = state;
-        this.broadcast(`servers:get:${this.id}`, this.getServerInfo())
-        if(this.isCurrent()) this.broadcast('servers:current', this.getServerInfo())
+        if(this.properties === null) {
+            this.fetchProperties().finally(() => this.broadcastInfo())
+        } else {
+            this.broadcastInfo();
+        }
     }
 
     /* Public Methods */
@@ -305,12 +433,30 @@ export class MinecraftServer {
             setState: this.stateChange,
         })
         this.broadcast('servers:current', this.getServerInfo())
+        if(this.pingInterval) clearInterval(this.pingInterval);
+        this.pingInterval = setInterval(() => {
+            pingCurrent().then(ping => {
+                this.broadcast('current:ping', ping)
+            }).catch(err => {
+                this.broadcast('current:ping')
+            })
+            this.getPlayers().then(players => {
+                this.broadcast('current:players', players)
+            }).catch(() => {
+                this.broadcast('current:players', [])
+            })
+        },5000)
     }
 
     public stop() {
+        if(this.pingInterval) {
+            clearInterval(this.pingInterval)
+            this.pingInterval = null;
+        }
         if(this.server) {
             this.server.closeServer();
             this.broadcast('servers:current', null)
+            this.broadcast('current:ping')
         }
     }
 
@@ -333,12 +479,27 @@ export class MinecraftServer {
     public cmd(line: string) {
         this.server?.sendCommand(line)
     }
+    
+    public async sneakyCmd(line: string) {
+        if(this.server) {
+            try {
+                return await this.server.silentCommand(line);
+            } catch (error) {
+                return null;
+            }
+        } else {
+            return null;
+        }
+    }
 
     public getProperties() {
         return this.properties;
     }
 
     public setProperty(key: string, value: string | number | boolean) {
+        if(this.properties === null) {
+            this.properties = {}
+        }
         this.properties[key] = value.toString();
         this.writeProperties();
     }
@@ -352,7 +513,8 @@ export class MinecraftServer {
             state: this.serverState,
             worlds: this.config.worlds,
             activeWorld: this.config.activeWorld,
-            properties: this.properties,
+            properties: this.properties || {},
+            changes: this.hasChanges
         }
     }
 
@@ -374,6 +536,98 @@ export class MinecraftServer {
 
     public isCurrent() {
         return this.getCurrent() === this.id;
+    }
+
+    public addWorld(worldname: string) {
+
+        let codename = worldname.toLowerCase().replace(/[^a-z0-9-_ ]/g, '').replace(/ /g, '-');
+
+        let exists = false;
+        for(const world of this.config.worlds) {
+            if(world.name === codename) {
+                exists = true;
+            }
+        }
+
+        if(exists) codename = codename + '_' + Math.random().toString(36).substr(2,7);
+
+        const world: World = {
+            name: codename,
+            title: worldname
+        }
+
+        this.setConfig('worlds', [...this.config.worlds, world]);
+    }
+
+    public getBackups() {
+        return this.backups;
+    }
+
+    public async createBackup(worldname: string) {
+
+        if(!this.config.worlds.find(world => world.name === worldname)) return null;
+
+        try {
+
+            // Ensure Backups folder exists
+            try {
+                await fs.stat(path.join(app.getAppPath(), 'minecraft-servers', this.dir, 'server-backups'))
+            } catch (error) {
+                await fs.mkdir(path.join(app.getAppPath(), 'minecraft-servers', this.dir, 'server-backups'))
+            }
+
+            const timestamp = Date.now();
+            const zipname = `${worldname}.${timestamp}.zip`
+            
+            const time = await archiveDirectory(
+                path.join(app.getAppPath(), 'minecraft-servers', this.dir, worldname),
+                path.join(app.getAppPath(), 'minecraft-servers', this.dir, 'server-backups', zipname)
+            )
+
+            this.backups[worldname] = [...this.backups[worldname], {
+                id: uuidv4(),
+                world_name: worldname,
+                timestamp: timestamp,
+                filename: zipname,
+            }]
+
+            this.broadcast(`servers:backups:${this.id}`, this.backups)
+
+            return time;
+
+        } catch (error) {
+            return null;
+        }
+    }
+
+    public async getPlayers() {
+        if(this.server && this.isCurrent()) {
+            try {
+                
+                const log = await this.server.silentCommand('list uuids');
+
+                if(!log) throw 'no-logs';
+
+                const rawplayers = log.message.match(/([A-Za-z0-9-_]+) \(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)/g)
+
+                if(!rawplayers) throw 'no-raw';
+
+                let players: MinecraftUser[] = []
+                for(const player of rawplayers) {
+                    const match = player.match(/([A-Za-z0-9-_]+) \(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)/)
+                    if(match) {
+                        players = [...players, { name: match[1], uuid: match[2] }]
+                    }
+                }
+
+                return players;
+
+            } catch (error) {
+                return [];
+            }
+        } else {
+            return [];
+        }
     }
 
 }

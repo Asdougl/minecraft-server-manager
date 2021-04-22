@@ -3,14 +3,15 @@ import { MinecraftUser } from '../../../app/types'
 
 interface Props {
     players: MinecraftUser[];
-    online: string[];
 }
 
-const Players = ({ players, online }: Props) => {
+const Players = ({ players }: Props) => {
     return (
         <div>
             <ul>
-                {players.map(player => <li key={player.uuid}>{player.name} {online.includes(player.uuid) && 'Online'}</li>)}
+                {players.length ? 
+                    players.map(player => <li key={player.uuid}>{player.name}</li>)
+                : <li>Nobody is Online :(</li>}
             </ul>
         </div>
     )

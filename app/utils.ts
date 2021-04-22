@@ -1,8 +1,9 @@
-import * as fs from 'fs/promises'
+import { promises as fs, createWriteStream} from 'fs'
 import { app } from 'electron'
 import path from 'path'
 import { spawn } from 'child_process'
 import { parse as propsParse, stringify as propsStringify, Tree } from 'dot-properties'
+import archiver from 'archiver'
 
 export const directoryCheck = async (nickname: string) => {
 
@@ -97,3 +98,22 @@ export const setProperties = async (dir: string, properties: Tree) => {
         throw error;
     }
 }
+
+export const archiveDirectory = (inputPath: string, outputPath: string) => new Promise((resolve, reject) => {
+    const output = createWriteStream(outputPath);
+    const archive = archiver('zip', { zlib: { level: 9 } })
+
+    output.on('close', () => {
+        resolve(archive.pointer());
+    })
+    
+    archive.on('error', err => {
+        reject(err);
+    })
+
+    archive.pipe(output);
+
+    archive.directory(inputPath, false);
+
+    archive.finalize();
+})

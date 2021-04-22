@@ -15,9 +15,15 @@ const Dashboard = ({ activeid }: Props) => {
     const servers = useSubscription(main.servers.list)
     const publicIp = useSubscription(main.application.publicIp)
 
+    console.log(servers)
+
     return (
         <ViewWrapper>
-            <ViewHeader title="Minecraft Servers" />
+            <ViewHeader title="Minecraft Servers">
+                <Link to="/settings" className="opacity-20 hover:opacity-50 px-1 focus:outline-none">
+                    <FontAwesomeIcon icon={['fal', 'cogs']} size="xs" />
+                </Link>
+            </ViewHeader>
             <h3>Public IP: {publicIp || '...'}</h3>
             <h2 className="text-2xl font-bold">Your Servers:</h2>
             <ul className="flex flex-col gap-2 px-2 py-2">

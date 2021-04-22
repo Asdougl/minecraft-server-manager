@@ -1,11 +1,8 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
-import { promises as fs, existsSync, mkdirSync } from 'fs'
-import { MinecraftServer, createMinecraftServer } from './MinecraftServer'
-import { LoadState, LogEvents, ServerData, ServerInfo } from './types'
-import { v4 as uuid } from 'uuid'
+import { LoadState, MinecraftUser, ServerCreateInfo, ServerInfo } from './types'
 import publicip from 'public-ip'
-import { getCurrent, getServer, getServerList, rebuildServers, startServer } from './servers'
+import { getCurrent, getServer, getServerList, rebuildServers, startServer, createServer, pingCurrent } from './servers'
 import { openServerPath } from './utils'
 
 const IS_DEV = process.env.NODE_ENV === 'development'
@@ -132,7 +129,6 @@ app.on('activate', focusWindow)
 
 // Node Error Handler
 const broadcast = (channel: string, ...args: any[]) => {
-    console.log("Having a little broadcast here... ", channel, ...args);
     for(const id in winmap) {
         winmap[id].webContents.send(channel, ...args);
     }
@@ -205,8 +201,20 @@ ipcMain.handle('servers:directory', (evt, serverid: string) => {
     if(srv) openServerPath(srv.getServerInfo().dir)
 })
 
-ipcMain.handle('servers:create', (evt, config: ServerInfo) => {
-    // TODO
+ipcMain.handle('servers:create', async (evt, config: ServerCreateInfo) => {
+    try {
+        
+        await createServer({
+            name: config.name,
+            jarpath: config.jar,
+            broadcast: broadcast,
+        })
+
+        return true;
+
+    } catch (error) {
+        return false;
+    }
 })
 
 ipcMain.handle('servers:edit', (evt, id: string, config: ServerInfo) => {
@@ -219,6 +227,23 @@ ipcMain.handle('servers:properties-edit', (evt, id: string, property: string, va
     if(srv) {
         srv.setProperty(property, value)
     }
+})
+
+ipcMain.handle('servers:world-add', (evt, serverid: string, worldname: string) => {
+    const srv = getServer(serverid)
+    if(srv) {
+        srv.addWorld(worldname);
+    }
+})
+
+ipcMain.handle('servers:backups', (evt, serverid: string) => {
+    const srv = getServer(serverid)
+    return srv ? srv.getBackups() : []
+})
+
+ipcMain.handle('servers:create-backup', (evt, serverid: string, worldname: string) => {
+    const srv = getServer(serverid)
+    if(srv) srv.createBackup(worldname)
 })
 
 
@@ -277,5 +302,30 @@ ipcMain.handle('current:command', (evt, command: string) => {
     const curr = getCurrent();
     if(curr) {
         return curr.cmd(command);
+    }
+})
+
+ipcMain.handle('current:ping', async () => {
+    if(getCurrent()) {
+        try {
+            
+            return await pingCurrent();
+
+        } catch (error) {
+            return undefined;
+        }   
+    } else {
+        return undefined
+    }
+})
+
+ipcMain.handle('current:players', async () => {
+    const curr = getCurrent();
+    if(curr) {
+
+        return curr.getPlayers();
+
+    } else {
+        return []
     }
 })

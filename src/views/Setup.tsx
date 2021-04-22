@@ -30,8 +30,8 @@ const Setup = (props: Props) => {
     const [validName, setValidName] = useState(false);
 
     useEffect(() => {
-        const potentialDir = name.toLowerCase().replace(' ', '-')
-        setValidName(name ? (servers ? !servers.find(srv => srv.name === name || srv.dir === name || srv.dir === potentialDir || srv.name === potentialDir) && /^[A-Za-z 0-9-_]+$/.test(name) : false) : true)
+        const potentialDir = name.toLowerCase().replace(/[^a-z0-9-_ ]/g, '').replace(/ /g, '-')
+        setValidName(name ? (servers ? !servers.find(srv => srv.name === name || srv.dir === name || srv.dir === potentialDir || srv.name === potentialDir) : false) : true)
     },[name, servers])
 
     useEffect(() => {
@@ -46,7 +46,13 @@ const Setup = (props: Props) => {
         if(file && agree) {
             setPending(true);
             // ADD TO SERVER!!!
-            
+            main.servers.create({
+                name: name,
+                jar: file.path,
+            }).then(result => {
+                if(result) history.push('/')
+                else console.log("thats a yikes");
+            })
         }
     }
 

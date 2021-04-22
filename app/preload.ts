@@ -150,7 +150,15 @@ const api: API = {
         edit: (id, info) => ipcRenderer.invoke('servers:edit', id, info),
         directory: serverid => ipcRenderer.invoke('servers:directory', serverid),
         // todo
-        setProperty: ({ id, property }, value) => ipcRenderer.invoke('servers:properties-edit', id, property, value)
+        setProperty: ({ id, property }, value) => ipcRenderer.invoke('servers:properties-edit', id, property, value),
+        addWorld: (serverid, worldname) => ipcRenderer.invoke('servers:world-add', serverid, worldname),
+        backups: id => {
+            return {
+                get: () => ipcRenderer.invoke('servers:backups', id),
+                listen: createListener('servers:backups', id)
+            }
+        },
+        createBackup: (serverid, worldname) => ipcRenderer.invoke('servers:create-backup', serverid, worldname)
     },
     current: {
         start: serverid => ipcRenderer.invoke('current:start', serverid),
@@ -166,10 +174,18 @@ const api: API = {
         },
         logs: {
             get: () => ipcRenderer.invoke('current:logs'),
-            listen: createListener('current:log')
+            listen: createListener('current:logs')
         },
         logWindow: () => ipcRenderer.invoke('current:log-window'),
         command: cmd => ipcRenderer.invoke('current:command', cmd),
+        ping: {
+            get: () => ipcRenderer.invoke('current:ping'),
+            listen: createListener('current:ping')
+        },
+        players: {
+            get: () => ipcRenderer.invoke('current:players'),
+            listen: createListener('current:players')
+        }
     }
 }
 

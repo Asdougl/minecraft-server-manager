@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/archiver": "^5.1.0",
     "@types/node": "^14.14.35",
     "@types/react": "^17.0.3",
     "@types/react-dom": "^17.0.3",
@@ -48,6 +49,7 @@
     "@fortawesome/react-fontawesome": "^0.1.14",
     "@types/react-router-dom": "^5.1.7",
     "@types/uuid": "^8.3.0",
+    "archiver": "^5.3.0",
     "dayjs": "^1.10.4",
     "dot-properties": "^1.0.1",
     "electron-store": "^7.0.2",
@@ -57,8 +59,8 @@
     "react-router-dom": "^5.2.0",
     "uuid": "^3.4.0"
   },
-  "build":{
-    "appId":"com.asdougl.minecraft-server-manager",
-    "productName":"Minecraft Server Manager"
+  "build": {
+    "appId": "com.asdougl.minecraft-server-manager",
+    "productName": "Minecraft Server Manager"
   }
 }

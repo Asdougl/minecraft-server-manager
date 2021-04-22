@@ -6,11 +6,13 @@ import { StringEditable, NumberEditable, BooleanEditable } from '../../component
 interface Props {
     properties: Tree;
     onSave: (label: string, value: string) => void;
+    online: boolean;
 }
 
-const propblacklist = ['level-name']
+// Change this so that they display but are locked with 'edit elsewhere'
+const propblacklist = ['level-name','gamemode','difficulty','enable-command-block','hardcore']
 
-const Properties = ({ properties, onSave }: Props) => {
+const Properties = ({ properties, onSave, online }: Props) => {
 
     let rows: JSX.Element[] = [];
 
@@ -54,14 +56,24 @@ const Properties = ({ properties, onSave }: Props) => {
 
     return (
         <div className="grid grid-cols-2 gap-1">
-            <div className="col-span-2 flex border focus-within:border-blue-400 bg-white rounded-lg">
-                <input className="w-full px-2 flex-grow bg-transparent focus:outline-none" type="text" value={filter} onChange={e => setFilter(e.currentTarget.value)} placeholder="Filter" />
-                {filter &&
-                <button className="focus:outline-none w-8">
-                    <FontAwesomeIcon className="opacity-50 hover:opacity-80" icon="times" onClick={() => setFilter('')} />
-                </button>}
-            </div>
-            {rows}
+            { Object.keys(properties).length ? <>
+                {online && (
+                    <div className="rounded-full flex items-center gap-1 bg-yellow-500 bg-opacity-25 text-yellow-700 border border-transparent px-2 py-1 col-span-2">
+                        <FontAwesomeIcon icon="exclamation-circle" fixedWidth />
+                        Any Changes will require server restart
+                    </div>
+                )}
+                <div className="col-span-2 flex border focus-within:border-blue-400 bg-white rounded-lg">
+                    <input className="w-full px-2 flex-grow bg-transparent focus:outline-none" type="text" value={filter} onChange={e => setFilter(e.currentTarget.value)} placeholder="Filter" />
+                    {filter &&
+                    <button className="focus:outline-none w-8">
+                        <FontAwesomeIcon className="opacity-50 hover:opacity-80" icon="times" onClick={() => setFilter('')} />
+                    </button>}
+                </div>
+                {rows}
+            </> : <>
+                <div>Start the Server to Initialise Properties</div>
+            </>}
         </div>
     )
 }
