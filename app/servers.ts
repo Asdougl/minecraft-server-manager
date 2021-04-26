@@ -31,7 +31,7 @@ const ensureFolder = async (folder: string) => {
     }
 }
 
-export const rebuildServers = async (broadcast: Broadcaster) => {
+export const rebuildServers = async (broadcast: Broadcaster, autostart: string) => {
     try {
 
         const folder = path.join(app.getAppPath(), 'minecraft-servers')
@@ -74,6 +74,12 @@ export const rebuildServers = async (broadcast: Broadcaster) => {
 
         // Step 3 -- Assign the Server Map
         servers = srvmap;
+
+        if(autostart) {
+            console.log("We gonna start a server... " + autostart)
+            const started = startServer(autostart);
+            console.log("Did is start? " + (started ? 'Yes' : 'No'))
+        }
 
     } catch (error) {
         // Well then...

@@ -5,6 +5,7 @@ import main from '../electron'
 import { Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useSubscription } from '../hooks/useSubscription'
+import Modal from '../components/Modal'
 
 interface Props {
     activeid: string | null

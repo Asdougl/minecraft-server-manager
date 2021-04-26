@@ -63,7 +63,7 @@ const Properties = ({ properties, onSave, online }: Props) => {
                         Any Changes will require server restart
                     </div>
                 )}
-                <div className="col-span-2 flex border focus-within:border-blue-400 bg-white rounded-lg">
+                <div className="col-span-2 flex focus-within:ring focus-within:ring-blue-200 bg-white rounded">
                     <input className="w-full px-2 flex-grow bg-transparent focus:outline-none" type="text" value={filter} onChange={e => setFilter(e.currentTarget.value)} placeholder="Filter" />
                     {filter &&
                     <button className="focus:outline-none w-8">

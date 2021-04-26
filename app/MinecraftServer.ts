@@ -8,6 +8,7 @@ import { promises as fs } from 'fs'
 import { parse as parseProps, stringify as stringifyProps } from 'dot-properties'
 import { archiveDirectory } from './utils'
 import { pingCurrent } from "./servers";
+import cron from 'node-cron'
 
 const isStatus = (test: string): test is LogStatus => {
     return ['INFO', 'WARN', 'ERROR'].includes(test);
@@ -250,6 +251,15 @@ export class MinecraftServer {
         this.dir = dir;
         this.id = id;
 
+        // Schedule Backups
+        for(const world of this.config.worlds) {
+            if(world.schedule) {
+                cron.schedule(world.schedule, () => {
+                    this.createBackup(world.name);
+                })
+            }
+        }
+
         // Perform Async Actions
         Promise.all([
             this.fetchProperties(),
@@ -267,7 +277,6 @@ export class MinecraftServer {
 
             // Assign yer backups
             this.backups = backups;
-            console.log(`BACKUPS: ${this.config.name}`, this.backups)
             this.broadcast(`server:backups:${this.id}`, this.backups)
 
             // Finally broacast your new discoveries
@@ -347,7 +356,6 @@ export class MinecraftServer {
 
             let backups: WorldBackupMap = {};
             this.config.worlds.forEach(world => backups[world.name] = []);
-            console.log(files);
             for(const file of files) {
                 if(file.isFile()) {
                     const filenamematch = file.name.match(/([a-z0-9-_]+)\.(\d+)\.zip/);

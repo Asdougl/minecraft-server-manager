@@ -16,6 +16,7 @@ import Players from './Players'
 import StatusLabel from '../../components/util/StatusLabel'
 import Console from './Console'
 import Backups from './Backups'
+import Confirmation from '../../components/Confirmation'
 
 const dimName = (dimension: string) => {
     if(dimension === 'minecraft:overworld') {

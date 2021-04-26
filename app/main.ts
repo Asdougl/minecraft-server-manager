@@ -1,12 +1,38 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import path from 'path'
-import { LoadState, MinecraftUser, ServerCreateInfo, ServerInfo } from './types'
+import { LoadState, MinecraftUser, Preferences, ServerCreateInfo, ServerInfo, Theme } from './types'
 import publicip from 'public-ip'
 import { getCurrent, getServer, getServerList, rebuildServers, startServer, createServer, pingCurrent } from './servers'
 import { openServerPath } from './utils'
+import AutoLaunch from 'auto-launch'
+import ElectronStore from 'electron-store'
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
+/*
+    # ELECTRON STORE
+======================================================= */
+
+const store = new ElectronStore<Preferences>({
+    schema: {
+        startup: {
+            type: 'boolean',
+            default: false,
+        },
+        defaultServer: {
+            type: ['null', 'string'],
+            default: null,
+        },
+        minimised: {
+            type: ['boolean'],
+            default: false,
+        },
+        theme: {
+            enum: ['light', 'dark'],
+            default: 'light'
+        },
+    }
+})
 
 /*
     # CREATE WINDOW
@@ -122,8 +148,32 @@ if(gotLock === false) {
     app.on('second-instance', focusWindow)
 }
 
+
+
 // Handle App Events
-app.on('ready', () => winmap['main'] = createWindow({ onClose: () => delete winmap['main'] }))
+app.on('ready', () => {
+
+    console.log("Auto Start: ", store.get('defaultServer'))
+    rebuildServers(broadcast, store.get('defaultServer') || '');
+    
+    winmap['main'] = createWindow({ onClose: () => delete winmap['main'] })
+    
+    if(!IS_DEV) {
+        const autoLauncher = new AutoLaunch({
+            name: 'Minecraft Server Manager',
+            path: app.getPath('exe')
+        })
+        autoLauncher.isEnabled().then(enabled => {
+            const startup = store.get('startup')
+            if(enabled) {
+                if(!startup) autoLauncher.disable();
+            } else {
+                if(startup) autoLauncher.enable();
+            }
+        })
+    }
+    
+})
 app.on('window-all-closed', () => app.quit())
 app.on('activate', focusWindow)
 
@@ -171,13 +221,16 @@ ipcMain.handle('application:public-ip', async () => {
     }
 })
 
+// Open Link Externally
+ipcMain.handle('application:open-external', (evt, url: string) => {
+    shell.openExternal(url)
+})
+
 
 /*
     # MINECRAFT SERVERS
     track the minecraft servers
 ======================================================= */
-
-rebuildServers(broadcast);
 
 ipcMain.handle('servers:list', (evt, newserver?: ServerInfo) => {
     if(newserver) {
@@ -328,4 +381,53 @@ ipcMain.handle('current:players', async () => {
     } else {
         return []
     }
+})
+
+
+/*
+    # SERVER MANAGER SETTINGS
+======================================================= */
+
+ipcMain.handle('settings:startup', async (evt, startup?: boolean) => {
+    // TODO
+    if(startup !== undefined) {
+        // Setting
+        store.set('startup', startup);
+        broadcast('settings:startup', startup)
+    }
+
+    return store.get('startup')
+})
+
+ipcMain.handle('settings:default-server', async (evt, server?: string | null) => {
+    // TODO
+    if(server !== undefined) {
+        // Setting
+        store.set('defaultServer', server);
+        broadcast('settings:default-server', server)
+    }
+    
+    return store.get('defaultServer')
+})
+
+ipcMain.handle('settings:minimised', async (evt, minimised?: boolean) => {
+    // TODO
+    if(minimised !== undefined) {
+        // Setting
+        store.set('minimised', minimised);
+        broadcast('settings:minimised', minimised)
+    }
+    
+    return store.get('minimised')
+})
+
+ipcMain.handle('settings:theme', async (evt, theme?: Theme) => {
+    // TODO
+    if(theme !== undefined) {
+        // Setting
+        store.set('theme', theme);
+        broadcast('settings:theme', theme)
+    }
+    
+    return store.get('theme')
 })

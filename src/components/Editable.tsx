@@ -12,14 +12,11 @@ interface WrapperProps {
 }
 
 const Wrapper: FunctionComponent<WrapperProps> = ({ children, editing, toggleEditing }) => {
-
-    
-
     return (
-        <div className={`w-full flex rounded-lg overflow-visible border-2 ${editing ? 'border-blue-400' : 'border-gray-200'}`}>
+        <div className={`w-full flex rounded overflow-visible border-2 ${editing ? 'border-blue-400' : 'border-gray-200'}`}>
             {children}
             <button 
-                className="w-8 focus:outline-none rounded-lg focus:bg-blue-100 opacity-50 hover:opacity-80"
+                className="w-8 focus:outline-none rounded focus:bg-blue-100 opacity-50 hover:opacity-80"
                 onClick={toggleEditing}
             >
                 <FontAwesomeIcon className="" icon={editing ? 'save' : 'pencil'} />
@@ -42,7 +39,7 @@ export const StringEditable = ({ value, onSave }: Props<string>) => {
         <Wrapper editing={editing} toggleEditing={onToggle}>
             <input 
                 type="text"
-                className={`flex-grow w-0 bg-transparent px-2 rounded-lg focus:outline-none focus:bg-blue-100`}
+                className={`flex-grow w-0 bg-transparent px-2 rounded focus:outline-none focus:bg-blue-100`}
                 value={temp} 
                 onChange={e => setTemp(e.currentTarget.value)} 
                 disabled={!editing}
@@ -65,7 +62,7 @@ export const NumberEditable = ({ value, onSave }: Props<number>) => {
         <Wrapper editing={editing} toggleEditing={onToggle}>
             <input 
                 type="text"
-                className={`flex-grow w-0 bg-transparent px-2 rounded-lg focus:outline-none focus:bg-blue-100`}
+                className={`flex-grow w-0 bg-transparent px-2 rounded focus:outline-none focus:bg-blue-100`}
                 value={temp} 
                 onChange={e => setTemp(e.currentTarget.value)} 
                 disabled={!editing}
@@ -88,11 +85,11 @@ export const BooleanEditable = ({ value, onSave }: Props<boolean>) => {
         <Wrapper editing={editing} toggleEditing={onToggle}>
             <div className="grid grid-cols-2 flex-grow">
                 <button 
-                    className={`rounded-lg focus:outline-none ${temp ? (editing ? 'bg-blue-300' : 'bg-gray-300') : ''}`}
+                    className={`rounded focus:outline-none ${temp ? (editing ? 'bg-blue-300' : 'bg-gray-300') : ''}`}
                     onClick={() => setTemp(true)}
                 >True</button>
                 <button 
-                    className={`rounded-lg focus:outline-none ${!temp ? (editing ? 'bg-blue-300' : 'bg-gray-300') : ''}`}
+                    className={`rounded focus:outline-none ${!temp ? (editing ? 'bg-blue-300' : 'bg-gray-300') : ''}`}
                     onClick={() => setTemp(false)}
                 >False</button>
             </div>

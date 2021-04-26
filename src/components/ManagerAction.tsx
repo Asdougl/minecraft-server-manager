@@ -44,9 +44,9 @@ const ManagerAction: FunctionComponent<Props> = ({ children, title, icon, action
                 {!action && <FontAwesomeIcon icon="chevron-down" className={`text-blue-500 transform transition-transform ${show ? 'rotate-180' : 'rotate-0'}`} fixedWidth />}
             </button>
             {show && <hr className="mx-2" />}
-            <div className={`${show ? 'h-auto max-h-64 p-2' : 'h-0'} overflow-auto`}>
+            <div className={`${show ? 'h-auto max-h-64' : 'h-0'} overflow-auto`}>
                 {!action &&
-                    <div className={show ? 'overflow-y-auto' : 'h-0'}>
+                    <div className={`${show ? 'overflow-y-auto' : 'h-0'} p-2`}>
                         {children}
                     </div>
                 }

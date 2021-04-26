@@ -2,16 +2,19 @@ module.exports = {
   purge: [
     "./src/**/*.tsx"
   ],
-  darkMode: false, // or 'media' or 'class'
+  darkMode: 'class', // or 'media' or 'class'
   theme: {
     extend: {},
   },
   variants: {
     extend: {
       opacity: ['disabled'],
-      backgroundColor: ['disabled'],
+      backgroundColor: ['disabled','even'],
       textColor: ['disabled'],
-      cursor: ['disabled']
+      cursor: ['disabled'],
+      borderRadius: ['first','last','focus'],
+      visibility: ['group-focus'],
+      borderWidth: ['last']
     },
   },
   plugins: [],

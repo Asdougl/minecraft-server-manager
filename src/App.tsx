@@ -10,10 +10,12 @@ import Setup from './views/Setup'
 import Manager from './views/Manager'
 import ServerStats from './components/ServerStats'
 import { useSubscription } from './hooks/useSubscription'
+import { useInteractive } from './hooks/useInterative'
 
 const App = () => {
 
     const currentServer = useSubscription(main.servers.current)
+    const [theme] = useInteractive(main.settings.theme)
 
     /*
     const [serverStatus, setServerStatus] = useState<ServerStatus>('offline');
@@ -62,27 +64,30 @@ const App = () => {
     return (
         <Router>
             <CurrentServerContext.Provider value={currentServer}>
-                <div className="flex flex-col overflow-hidden h-screen">
+                <div className={`${theme === 'dark' ? 'dark' : ''} flex flex-col overflow-hidden h-screen`}>
                     <TitleBar />
-                    <Switch>
-                        <Route exact path="/">
-                            <Dashboard activeid={currentServer ? currentServer.id : ''} />
-                        </Route>
-                        <Route path="/manage/:serverid">
-                            <Manager />
-                        </Route>
-                        <Route path="/settings">
-                            <Settings />
-                        </Route>
-                        <Route path="/setup">
-                            <Setup />
-                        </Route>
-                        <Route path="/srvconsole/:serverid">
-                            <Logs />
-                        </Route>
-                        <Route path="*" children={<Redirect to="/" />} />
-                    </Switch>
-                    {currentServer && currentServer.state === 'online' && <ServerStats server={currentServer} />}
+                    <div className="flex flex-col overflow-hidden h-full relative">
+                        <Switch>
+                            <Route exact path="/">
+                                <Dashboard activeid={currentServer ? currentServer.id : ''} />
+                            </Route>
+                            <Route path="/manage/:serverid">
+                                <Manager />
+                            </Route>
+                            <Route path="/settings">
+                                <Settings />
+                            </Route>
+                            <Route path="/setup">
+                                <Setup />
+                            </Route>
+                            <Route path="/srvconsole/:serverid">
+                                <Logs />
+                            </Route>
+                            <Route path="*" children={<Redirect to="/" />} />
+                        </Switch>
+                        {currentServer && currentServer.state === 'online' && <ServerStats server={currentServer} />}
+                        <div id="modal-root"></div>
+                    </div>
                 </div>
             </CurrentServerContext.Provider>
         </Router>

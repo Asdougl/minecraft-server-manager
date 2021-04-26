@@ -12,6 +12,7 @@ type Gamemode = 'survival' | 'creative' | 'adventure'
 export interface World {
     name: string;
     title: string;
+    schedule?: string;
 }
 
 /* Data Extracted from manager.config.json */
@@ -78,7 +79,7 @@ export const validServerData = (test: any): test is ServerData => {
 }
 
 const isWorld = (test: any): test is World => {
-    return (typeof test === 'object' && typeof test.name === 'string' && typeof test.title === 'string')
+    return (typeof test === 'object' && typeof test.name === 'string' && typeof test.title === 'string' && (test.schedule === undefined || typeof test.schedule === 'string'))
 }
 
 export const isServerData = (test: any): test is ServerData => {
@@ -98,6 +99,12 @@ interface Binders {
 
 export interface Hook<T> {
     get: () => Promise<T>;
+    listen: (listener: (updated: T) => void) => () => void;
+}
+
+export interface InteractiveHook<T> {
+    get: () => Promise<T>;
+    set: (val: T) => Promise<T>;
     listen: (listener: (updated: T) => void) => () => void;
 }
 
@@ -129,6 +136,7 @@ export interface API {
     application: {
         state: Hook<string>;
         publicIp: Hook<string>;
+        openExternal: Task<string>;
     },
     servers: {
         list: Hook<ServerInfo[]>;
@@ -155,6 +163,12 @@ export interface API {
         // players: Hook<MinecraftUser[] | null>;
         players: Hook<MinecraftUser[]>;
     },
+    settings: {
+        startup: InteractiveHook<boolean>;
+        defaultServer: InteractiveHook<string | null>;
+        minimised: InteractiveHook<boolean>;
+        theme: InteractiveHook<Theme>;
+    }
 }
 
 export interface ServerPing {
@@ -163,6 +177,15 @@ export interface ServerPing {
     players: number;
     max: number;
     ping: number;
+}
+
+export type Theme = 'light' | 'dark'
+
+export interface Preferences {
+    startup: boolean;
+    defaultServer: string | null;
+    minimised: boolean;
+    theme: Theme;
 }
 
 /*

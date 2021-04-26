@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IpcRendererEvent } from "electron/main";
-import { API } from './types'
+import { API, Hook, InteractiveHook } from './types'
 
 /*
 
@@ -109,6 +109,17 @@ const createListener = (channel: string, condition?: string) => (listener: (upda
     }
 } 
 
+const createHook = <T>(channel: string): Hook<T> => ({
+    get: () => ipcRenderer.invoke(channel),
+    listen: createListener(channel)
+})
+
+const createInteractiveHook = <T>(channel: string): InteractiveHook<T> => ({
+    get: () => ipcRenderer.invoke(channel),
+    set: (value: T) => ipcRenderer.invoke(channel, value),
+    listen: createListener(channel)
+})
+
 const api: API = {
     window: {
         minimize: () => ipcRenderer.send('window:minimize'),
@@ -127,7 +138,8 @@ const api: API = {
         publicIp: {
             get: () => ipcRenderer.invoke('application:public-ip'),
             listen: createListener('application:public-ip')
-        }
+        },
+        openExternal: (url: string) => ipcRenderer.invoke('application:open-external', url)
     },
     servers: {
         list: {
@@ -186,6 +198,12 @@ const api: API = {
             get: () => ipcRenderer.invoke('current:players'),
             listen: createListener('current:players')
         }
+    },
+    settings: {
+        startup: createInteractiveHook('settings:startup'),
+        defaultServer: createInteractiveHook('settings:default-server'),
+        minimised: createInteractiveHook('settings:minimised'),
+        theme: createInteractiveHook('settings:theme')
     }
 }
 
