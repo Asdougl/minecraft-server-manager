@@ -18,8 +18,12 @@ export function useSubscription<T, U = T>(
             options?.onUpdate?.(change);
         }
 
+        let isSubscribed = true;
+
         hook.get()
         .then(data => {
+            if(!isSubscribed) return;
+
             if(data === undefined) {
                 setData(null);
                 options?.onNull?.();
@@ -32,6 +36,7 @@ export function useSubscription<T, U = T>(
         const unlisten = hook.listen(listener);
 
         return () => {
+            isSubscribed = false;
             unlisten();
         }
     },[])

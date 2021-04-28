@@ -7,17 +7,23 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import CronEditor from '../../components/CronEditor'
 import Modal from '../../components/Modal'
 import Confirmation from '../../components/Confirmation'
+import electron from '../../electron'
 
 dayjs.extend(LocalizedFormat)
 dayjs.extend(RelativeTime)
 
-const BackupOption = ({ timestamp }: WorldBackup) => {
+interface BackupOptionProps extends WorldBackup {
+    restore: (autobackup: boolean) => void;
+    online: boolean;
+}
+
+const BackupOption = ({ timestamp, online, restore }: BackupOptionProps) => {
 
     const [restoring, setRestoring] = useState(false)
 
     const onRestore = (backup: boolean) => {
         setRestoring(false);
-        console.log(backup ? 'BACK ME UP SCOTTY' : 'JUST RESTORE TY')
+        restore(backup);
     }
 
     return (
@@ -26,8 +32,9 @@ const BackupOption = ({ timestamp }: WorldBackup) => {
                 {dayjs(timestamp).fromNow()}
             </div>
             <button
-                className="bg-blue-100 text-blue-500 hover:opacity-75 rounded-lg focus:outline-none focus:ring focus:ring-blue-200 flex items-center justify-center gap-1 px-3"
+                className="bg-blue-100 text-blue-500 hover:opacity-75 rounded-lg focus:outline-none focus:ring focus:ring-blue-200 flex items-center justify-center gap-1 px-3 disabled:bg-gray-100 disabled:text-black"
                 onClick={() => setRestoring(true)}
+                disabled={online}
             >Restore</button>
             {restoring && (
                 <Confirmation 
@@ -47,17 +54,19 @@ const BackupOption = ({ timestamp }: WorldBackup) => {
 interface WorldToBackupProps {
     world: World;
     backups: WorldBackup[];
+    online: boolean;
     create: () => void;
+    restore: (backupid: string, autobackup: boolean) => void;
+    schedule: (cron: string) => void;
 }
 
-const WorldToBackup = ({ world, backups, create }: WorldToBackupProps) => {
+const WorldToBackup = ({ world, backups, online, create, restore, schedule }: WorldToBackupProps) => {
 
     const [lastBackup, setLastBackup] = useState('');
     const [modalView, setModalView] = useState('')
     const [sorted, setSorted] = useState(backups)
 
     useEffect(() => {
-
         const nowSorted = backups.sort((a, b) => {
             if(a.timestamp < b.timestamp) return 1;
             if(a.timestamp > b.timestamp) return -1;
@@ -76,13 +85,24 @@ const WorldToBackup = ({ world, backups, create }: WorldToBackupProps) => {
             {/* Cron Job */}
             <CronEditor
                 cron={world.schedule || ''}
-                onSave={cron => console.log(cron)}
+                onSave={cron => schedule(cron)}
                 onCancel={() => setModalView('')}
             />
         </div>
     } else if(modalView === 'Backup History') {
         modalContent = <ul className="w-full flex flex-col gap-2">
-            {sorted.map(backup => <BackupOption key={backup.id} {...backup} />)}
+            {sorted.map(backup => (
+                <BackupOption 
+                    key={backup.id} 
+                    {...backup} 
+                    restore={autobackup => restore(backup.id, autobackup)} 
+                    online={online}
+                />
+            ))}
+            {online && <li className="w-full flex items-center gap-1 bg-yellow-500 bg-opacity-25 text-yellow-700 px-2 py-1 rounded-full">
+                <FontAwesomeIcon icon="exclamation-circle" />
+                Stop Server to Restore Backups    
+            </li>}
         </ul>
     }
 
@@ -127,30 +147,13 @@ const WorldToBackup = ({ world, backups, create }: WorldToBackupProps) => {
 interface Props {
     backups: WorldBackupMap;
     worlds: World[];
+    online: boolean;
     createBackup: (worldname: string) => void;
+    restoreBackup: (backupid: string, autobackup: boolean) => void;
+    scheduleBackup: (worldname: string, cron: string) => void;
 }
 
-const Backups = ({ backups, worlds, createBackup }: Props) => {
-
-    // let list: JSX.Element[] = []
-
-    // for(const world of worlds) {
-    //     const world_backups = backups[world.name];
-    //     list = [...list,
-    //         <div key={world.name}>
-    //             <h2 className="font-semibold text-lg">{world.title}</h2>
-    //             <ul>
-    //                 {world_backups && world_backups.map(bkup => (
-    //                     <li key={bkup.timestamp}>
-    //                         <span>{dayjs(bkup.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
-    //                         <button>Restore</button>
-    //                     </li>
-    //                 ))}
-    //                 <button onClick={() => createBackup(world.name)}>Create Backup</button>
-    //             </ul>
-    //         </div>
-    //     ]
-    // }
+const Backups = ({ backups, worlds, online, createBackup, restoreBackup, scheduleBackup }: Props) => {
 
     return (
         <ul className="flex flex-col gap-3">
@@ -158,8 +161,11 @@ const Backups = ({ backups, worlds, createBackup }: Props) => {
                 <WorldToBackup 
                     key={world.name}
                     world={world} 
+                    online={online}
                     backups={backups[world.name] || []} 
                     create={() => createBackup(world.name)}
+                    restore={restoreBackup}
+                    schedule={cron => scheduleBackup(world.name, cron)}
                 />
             ))}
         </ul>

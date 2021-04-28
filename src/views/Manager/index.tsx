@@ -17,6 +17,7 @@ import StatusLabel from '../../components/util/StatusLabel'
 import Console from './Console'
 import Backups from './Backups'
 import Confirmation from '../../components/Confirmation'
+import Advanced from './Advanced'
 
 const dimName = (dimension: string) => {
     if(dimension === 'minecraft:overworld') {
@@ -96,6 +97,9 @@ const Manager = (props: Props) => {
                         <div className="absolute top-0 left-0 bg-blue-600 h-full transition-all rounded-full" style={{ width: `${loading && loading.details && loading.details.progress ? loading.details.progress : 0 }%` }}></div>
                     </div>
                 </div>
+                {loading && loading.state !== 'pending' && logs && logs.length && <div className="px-6 py-2 text-xs font-mono opacity-60">
+                    {logs[logs.length - 1].message}
+                </div>}
                 
             </> : <>
                 {/* Server is online or offline */}
@@ -135,6 +139,7 @@ const Manager = (props: Props) => {
                             onClick={(worldname) => electron.servers.setProperty({ id: server.id, property: 'level-name' }, worldname)}
                             onCreate={worldname => electron.servers.addWorld(server.id, worldname)}
                             online={server.state === 'online'}
+                            onRename={(worldname, title) => electron.servers.renameWorld(server.id, worldname, title)}
                         />
                     </ManagerAction>
                     <ManagerAction 
@@ -185,7 +190,10 @@ const Manager = (props: Props) => {
                         <Backups 
                             backups={backups || {}}
                             worlds={server.worlds}
+                            online={server.state === 'online'}
                             createBackup={createBackup}
+                            restoreBackup={(backupid, auto) => electron.servers.restoreBackup(server.id, backupid, auto)}
+                            scheduleBackup={(worldname, cron) => electron.servers.scheduleBackup(server.id, worldname, cron)}
                         />
                     </ManagerAction>
                     <ManagerAction 
@@ -193,10 +201,20 @@ const Manager = (props: Props) => {
                         icon="folder-open"
                         action={() => electron.servers.directory(server.id)}
                     />
+                    <ManagerAction
+                        title="Advanced"
+                        icon="toolbox"
+                        modal="Advanced"
+                    >
+                        <Advanced 
+
+                        />
+                    </ManagerAction>
                     <ManagerAction 
                         title="Open Console"
                         icon="terminal"
                         disabled={server.state !== 'online'}
+                        modal="Console"
                     >
                         <Console 
                             logs={logs} 

@@ -1,9 +1,10 @@
-import { promises as fs, createWriteStream} from 'fs'
+import { promises as fs, createWriteStream, createReadStream } from 'fs'
 import { app } from 'electron'
 import path from 'path'
 import { spawn } from 'child_process'
 import { parse as propsParse, stringify as propsStringify, Tree } from 'dot-properties'
 import archiver from 'archiver'
+import unzipper from 'unzipper'
 
 export const directoryCheck = async (nickname: string) => {
 
@@ -99,7 +100,7 @@ export const setProperties = async (dir: string, properties: Tree) => {
     }
 }
 
-export const archiveDirectory = (inputPath: string, outputPath: string) => new Promise((resolve, reject) => {
+export const archiveDirectory = (inputPath: string, outputPath: string) => new Promise<number>((resolve, reject) => {
     const output = createWriteStream(outputPath);
     const archive = archiver('zip', { zlib: { level: 9 } })
 
@@ -116,4 +117,11 @@ export const archiveDirectory = (inputPath: string, outputPath: string) => new P
     archive.directory(inputPath, false);
 
     archive.finalize();
+})
+
+export const extractArchive = (archivePath: string, outputPath: string) => new Promise<void>((resolve, reject) => {
+    createReadStream(archivePath)
+        .pipe(unzipper.Extract({ path: outputPath }))
+        .on('close', () => resolve())
+        .on('error', () => reject())
 })

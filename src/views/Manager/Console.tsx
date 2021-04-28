@@ -27,15 +27,18 @@ const Console = ({ logs, command }: Props) => {
 
     return (
         <div className="flex flex-col h-full">
-            <ul className="flex-grow overflow-y-scroll overflow-x-hidden">
+            <ul className="flex-grow overflow-y-scroll overflow-x-hidden flex flex-col gap-1">
                 {logs ? logs.map(log => (
                     <li
                         key={log.id}
-                        className="font-mono text-xs"
+                        className="font-mono text-xs flex flex-col"
                     >
-                        <span>[<span className="text-green-600">{log.time}</span>]</span>
-                        <span>[<span className="text-blue-500">{log.thread}</span>/<span className="text-yellow-400">{log.status}</span>]</span>
-                        <span>{log.message}</span>
+                        <div className="opacity-75 pl-1">
+                            <span>&gt;</span>
+                            <span>[<span className="text-green-600">{log.time}</span>]</span>
+                            <span>[<span className="text-blue-500">{log.thread}</span>/<span className="text-yellow-400">{log.status}</span>]</span>
+                        </div>
+                        <div>{log.message}</div>
                     </li>
                 )) : <li>No Logs</li>}
                 <li ref={bottom}></li>

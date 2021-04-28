@@ -36,8 +36,6 @@ const Setup = (props: Props) => {
 
     useEffect(() => {
 
-        console.log({ name, file, agree })
-
         setReady(file !== null && agree);
 
     },[name, file, agree])

@@ -15,6 +15,14 @@ export interface World {
     schedule?: string;
 }
 
+export interface ScheduledWorld extends World {
+    schedule: string;
+}
+
+export const isScheduledWorld = (world: World): world is ScheduledWorld => {
+    return typeof world.schedule === 'string' && world.schedule !== ''
+}
+
 /* Data Extracted from manager.config.json */
 export interface ServerData {
     id: string;
@@ -146,9 +154,12 @@ export interface API {
         create: Creator<ServerCreateInfo>;
         edit: Mutator<string, Pick<ServerInfo, 'name'>>;
         setProperty: Mutator<{ id: string, property: string }, string>;
-        addWorld: Mutator<string, string>, 
-        backups: ConditionalHook<string, WorldBackupMap | null>
-        createBackup: Mutator<string, string>
+        addWorld: Mutator<string, string>;
+        renameWorld: (serverid: string, worldname: string, title: string) => Promise<void>;
+        backups: ConditionalHook<string, WorldBackupMap | null>;
+        scheduleBackup: (serverid: string, worldname: string, cron?: string) => Promise<void>;
+        createBackup: Mutator<string, string>;
+        restoreBackup: (serverid: string, backupid: string, autobackup?: boolean) => Promise<void>;
     },
     current: {
         start: Task<string>;

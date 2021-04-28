@@ -289,14 +289,33 @@ ipcMain.handle('servers:world-add', (evt, serverid: string, worldname: string) =
     }
 })
 
+ipcMain.handle('servers:world-rename', (evt, serverid: string, worldname: string, title: string) => {
+    const srv = getServer(serverid)
+    if(srv) {
+        srv.editWorld(worldname, 'title', title);
+    }
+})
+
+ipcMain.handle('servers:schedule-backup', (evt, serverid: string, worldname: string, cron?: string) => {
+    const srv = getServer(serverid)
+    if(srv) {
+        srv.editWorld(worldname, 'schedule', cron);
+    }
+})
+
 ipcMain.handle('servers:backups', (evt, serverid: string) => {
     const srv = getServer(serverid)
     return srv ? srv.getBackups() : []
 })
 
-ipcMain.handle('servers:create-backup', (evt, serverid: string, worldname: string) => {
+ipcMain.handle('servers:create-backup', async (evt, serverid: string, worldname: string) => {
     const srv = getServer(serverid)
-    if(srv) srv.createBackup(worldname)
+    if(srv) await srv.createBackup(worldname)
+})
+
+ipcMain.handle('servers:restore-backup', async (evt, serverid: string, backupid: string, autobackup?: boolean) => {
+    const srv = getServer(serverid);
+    if(srv) await srv.restoreBackup(backupid, autobackup)
 })
 
 

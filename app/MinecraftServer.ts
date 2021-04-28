@@ -1,14 +1,15 @@
 import { spawn, ChildProcessWithoutNullStreams } from "child_process";
-import { LogEvents, LogStatus, ServerData, ServerLog, ServerStatus, LoadingStatus, ServerInfo, LoadState, MinecraftUser, isMinecraftUser, World, WorldBackup, WorldBackupMap } from "./types";
+import { LogEvents, LogStatus, ServerData, ServerLog, ServerStatus, LoadingStatus, ServerInfo, LoadState, MinecraftUser, isMinecraftUser, World, WorldBackup, WorldBackupMap, ScheduledWorld, isScheduledWorld } from "./types";
 import path from 'path'
 import { app } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { Tree } from "dot-properties";
 import { promises as fs } from 'fs'
 import { parse as parseProps, stringify as stringifyProps } from 'dot-properties'
-import { archiveDirectory } from './utils'
+import { archiveDirectory, extractArchive } from './utils'
 import { pingCurrent } from "./servers";
 import cron from 'node-cron'
+import os from 'os'
 
 const isStatus = (test: string): test is LogStatus => {
     return ['INFO', 'WARN', 'ERROR'].includes(test);
@@ -17,6 +18,7 @@ const isStatus = (test: string): test is LogStatus => {
 interface MinecraftProcessConfig {
     server: ServerData;
     dir: string;
+    gb?: number;
     onClose: () => void;
     onLoading: (evt: LoadState) => void;
     onError: (error: string) => void;
@@ -45,14 +47,23 @@ class MinecraftProcess {
 
     /* Constructor */
 
-    constructor({ dir, onClose, onError, onLoading, onLog, setState }: MinecraftProcessConfig) {
+    constructor({ dir, onClose, onError, onLoading, onLog, setState, gb }: MinecraftProcessConfig) {
 
         this.onLoading = onLoading;
         this.onError = onError;
         this.onLog = onLog;
         this.onClose = onClose;
 
-        this.child = spawn('java', ['-Xmx2G', '-Xms2G', '-jar', 'server.jar', 'nogui'], { cwd: path.join(app.getAppPath(), 'minecraft-servers', dir) })
+        // Calc d-d-deditated Wam
+        let ram = '2G';
+        if(gb) {
+            const memory = Math.floor(os.totalmem() / 1000000000)
+            if(gb > 2 && gb < memory - 4) {
+                ram = `${Math.floor(gb)}G`
+            }
+        }
+
+        this.child = spawn('java', [`-Xmx${ram}`, `-Xms${ram}`, '-jar', 'server.jar', 'nogui'], { cwd: path.join(app.getAppPath(), 'minecraft-servers', dir) })
 
         this.setState = setState;
         this.setState('loading')
@@ -67,18 +78,18 @@ class MinecraftProcess {
         })
 
         const emergencyKill = () => {
-            this.child.kill('SIGINT')
+            this.child.kill('SIGKILL')
         }
 
-        process.on('beforeExit', emergencyKill)
+        process.on('exit', emergencyKill)
         
 
         this.child.on('exit', () => {
-            process.off('beforeExit', emergencyKill)           
+            process.off('exit', emergencyKill)           
         })
 
         this.child.on('error', err => {
-            process.off('beforeExit', emergencyKill)
+            process.off('exit', emergencyKill)
             this.onError(err.message)
             this.setState('error')
             this.closeServer();
@@ -177,7 +188,7 @@ class MinecraftProcess {
             this.sendCommand('stop');
 
             const tookTooLong = setTimeout(() => {
-                this.child.kill('SIGINT')
+                this.child.kill('SIGKILL')
             }, 10000)
 
             this.child.on('error', err => {
@@ -214,6 +225,11 @@ interface ServerEventLog {
     event: LogEvents;
 }
 
+interface WorldCronjob {
+    world: string;
+    cron: cron.ScheduledTask;
+}
+
 interface MinecraftServerConfig {
     dir: string;
     data: ServerData;
@@ -234,6 +250,8 @@ export class MinecraftServer {
     private id: string;
     private hasChanges: boolean = false;
 
+    private cronjobs: WorldCronjob[] = [];
+
     private logs: ServerLog[] = []
     private events: ServerEventLog[] = []
 
@@ -253,10 +271,9 @@ export class MinecraftServer {
 
         // Schedule Backups
         for(const world of this.config.worlds) {
-            if(world.schedule) {
-                cron.schedule(world.schedule, () => {
-                    this.createBackup(world.name);
-                })
+            if(isScheduledWorld(world)) {
+                const job = this.scheduleBackup(world)
+                if(job) this.cronjobs = [...this.cronjobs, { world: world.name, cron: job }];
             }
         }
 
@@ -428,9 +445,19 @@ export class MinecraftServer {
         }
     }
 
+    private scheduleBackup = (world: ScheduledWorld) => {
+        console.log("Scheduling for: ", world);
+        return world.schedule ? cron.schedule(world.schedule, () => {
+            console.log("Cron Scheduled")
+            this.createBackup(world.name);
+        }) : null;
+    }
+
     /* Public Methods */
 
     public start() {
+        this.handleLoading({ state: 'pending' })
+        this.fetchProperties();
         this.server = new MinecraftProcess({
             dir: this.dir,
             server: this.config,
@@ -567,6 +594,33 @@ export class MinecraftServer {
         this.setConfig('worlds', [...this.config.worlds, world]);
     }
 
+    public editWorld<T extends keyof Pick<World, 'title' | 'schedule'>>(worldname: string, key: T, value: World[T]) {
+        const world = this.config.worlds.find(w => w.name === worldname)
+        if(world) {
+            world[key] = value;
+            this.setConfig('worlds', [...this.config.worlds])
+            if(key === 'schedule') {
+                const jobindex = this.cronjobs.findIndex(cron => cron.world === world.name);
+                if(jobindex > -1) {
+                    this.cronjobs[jobindex].cron.stop();
+                    this.cronjobs.splice(jobindex, 1)
+                    if(isScheduledWorld(world)) {
+                        const newjob = this.scheduleBackup(world);
+                        if(newjob) {
+                            this.cronjobs = [...this.cronjobs, { world: world.name, cron: newjob }]
+                        }
+                    }
+                    
+                } else if(isScheduledWorld(world)) {
+                    const newjob = this.scheduleBackup(world);
+                    if(newjob) {
+                        this.cronjobs = [...this.cronjobs, { world: world.name, cron: newjob }]
+                    }
+                }
+            }
+        }
+    }
+
     public getBackups() {
         return this.backups;
     }
@@ -635,6 +689,53 @@ export class MinecraftServer {
             }
         } else {
             return [];
+        }
+    }
+
+    public async restoreBackup(backupid: string, autobackup?: boolean) {
+        if(!this.server) {
+            // Server must be offline
+            try {
+                
+                let backup: WorldBackup | null = null;
+                
+                for(const world in this.backups) {
+                    for(const bkup of this.backups[world]) {
+                        if(bkup.id === backupid) {
+                            backup = bkup;
+                            break;
+                        }
+                    }
+                    if(backup) break;
+                }
+
+                if(!backup) {
+                    // COULDN'T FIND IT
+                    throw new Error(`Backup of id ${backupid} not found`)
+                }
+
+                // We have the backup data
+
+                // STEP 0
+                if(autobackup) {
+                    await this.createBackup(backup.world_name);
+                }
+
+                // STEP 1 -- Remove Existing World Files
+                fs.rm(path.join(app.getAppPath(), 'minecraft-servers', this.dir, backup.world_name), { recursive: true, force: true })
+
+                // STEP 2 -- Extract Identified ZIP
+                await extractArchive(
+                    path.join(app.getAppPath(), 'minecraft-servers', this.dir, 'server-backups', backup.filename),
+                    path.join(app.getAppPath(), 'minecraft-servers', this.dir, backup.world_name)
+                )
+
+                // STEP 3 -- DONE
+
+            } catch (error) {
+                console.warn({ error })
+                return;
+            }
         }
     }
 

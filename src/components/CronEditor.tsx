@@ -47,6 +47,7 @@ const CronEditor = ({ cron, onSave, onCancel }: Props) => {
     const [dayOfWeek, setDayOfWeek] = useState('*')
 
     useEffect(() => {
+        console.log(cron);
         console.log("Do i take forever?");
         const cronified = cron.replaceAll(/[^\*,0-9 ]/g, '').split(' ');
         setMinute(cronified[0] || '*')

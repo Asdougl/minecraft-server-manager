@@ -18,6 +18,8 @@ export function useInteractive<T>(
 
     useEffect(() => {
 
+        let isSubscribed = true;
+
         const listener = (change: T) => {
             setData(change)
             options?.onUpdate?.(change)
@@ -25,6 +27,8 @@ export function useInteractive<T>(
         
         hook.get()
         .then(data => {
+            if(!isSubscribed) return;
+
             if(data === undefined) {
                 setData(null);
                 options?.onNull?.();
@@ -37,6 +41,7 @@ export function useInteractive<T>(
         const unlisten = hook.listen(listener);
 
         return () => {
+            isSubscribed = false;
             unlisten();
         }
 

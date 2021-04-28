@@ -1,6 +1,7 @@
 import { IconProp } from '@fortawesome/fontawesome-svg-core';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import React, { FunctionComponent, useState } from 'react'
+import Modal from './Modal';
 import Button from './util/Button'
 
 type ColorOptions = 'blue' | 'green' | 'red' | 'orange'
@@ -11,6 +12,7 @@ interface Props {
     action?: () => void;
     disabled?: boolean;
     color?: ColorOptions
+    modal?: string;
 }
 
 const getColor = (color?: ColorOptions) => {
@@ -22,7 +24,7 @@ const getColor = (color?: ColorOptions) => {
     }
 }
 
-const ManagerAction: FunctionComponent<Props> = ({ children, title, icon, action, disabled, color }) => {
+const ManagerAction: FunctionComponent<Props> = ({ children, title, icon, action, disabled, color, modal }) => {
 
     const [show, setShow] = useState(false);
 
@@ -41,17 +43,18 @@ const ManagerAction: FunctionComponent<Props> = ({ children, title, icon, action
             >
                 <FontAwesomeIcon icon={icon} className={textColor} fixedWidth />
                 <span className="flex-grow text-left">{title}</span>
-                {!action && <FontAwesomeIcon icon="chevron-down" className={`text-blue-500 transform transition-transform ${show ? 'rotate-180' : 'rotate-0'}`} fixedWidth />}
+                {!action && !modal && <FontAwesomeIcon icon="chevron-down" className={`text-blue-500 transform transition-transform ${show ? 'rotate-180' : 'rotate-0'}`} fixedWidth />}
             </button>
-            {show && <hr className="mx-2" />}
-            <div className={`${show ? 'h-auto max-h-64' : 'h-0'} overflow-auto`}>
-                {!action &&
-                    <div className={`${show ? 'overflow-y-auto' : 'h-0'} p-2`}>
-                        {children}
-                    </div>
-                }
-            </div>
-            
+            {!modal ? <>
+                {show && <hr className="mx-2" />}
+                <div className={`${show ? 'h-auto max-h-64' : 'h-0'} overflow-auto`}>
+                    {!action && (
+                        <div className={`${show ? 'overflow-y-auto' : 'h-0'} p-2`}>
+                            {children}
+                        </div>
+                    )}
+                </div>
+            </> : (show && <Modal title={modal} onClose={toggleShow}>{children}</Modal>)}
         </li>
     )
 }

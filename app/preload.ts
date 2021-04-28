@@ -164,13 +164,16 @@ const api: API = {
         // todo
         setProperty: ({ id, property }, value) => ipcRenderer.invoke('servers:properties-edit', id, property, value),
         addWorld: (serverid, worldname) => ipcRenderer.invoke('servers:world-add', serverid, worldname),
+        renameWorld: (serverid, worldname, title) => ipcRenderer.invoke('servers:world-rename', serverid, worldname, title),
         backups: id => {
             return {
                 get: () => ipcRenderer.invoke('servers:backups', id),
                 listen: createListener('servers:backups', id)
             }
         },
-        createBackup: (serverid, worldname) => ipcRenderer.invoke('servers:create-backup', serverid, worldname)
+        scheduleBackup: (serverid, worldname, cron) => ipcRenderer.invoke('servers:schedule-backup', serverid, worldname, cron),
+        createBackup: (serverid, worldname) => ipcRenderer.invoke('servers:create-backup', serverid, worldname),
+        restoreBackup: (serverid, backupid, autobackup) => ipcRenderer.invoke('servers:restore-backup', serverid, backupid, autobackup),
     },
     current: {
         start: serverid => ipcRenderer.invoke('current:start', serverid),
