@@ -15,7 +15,7 @@ const Button: FunctionComponent<ButtonProps> = ({ onClick, disabled, className, 
             type="button"
             onClick={onClick}
             disabled={disabled}
-            className={`px-3 py-2 bg-gray-100 rounded-lg flex ${!icon ? 'justify-center' : 'items-center gap-2'} hover:opacity-75 cursor-pointer ${className} focus:outline-none focus:ring focus:ring-blue-200 disabled:opacity-50 disabled:cursor-default`}
+            className={`px-2 py-1 bg-gray-100 rounded-lg flex ${!icon ? 'justify-center' : 'items-center gap-2'} hover:bg-opacity-75 cursor-pointer ${className} focus:outline-none focus:ring focus:ring-blue-200 disabled:opacity-50 disabled:cursor-default`}
         >
             {icon ? <>
                 <FontAwesomeIcon icon={icon} fixedWidth className="text-blue-600 fill-current" />

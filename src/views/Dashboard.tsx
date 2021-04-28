@@ -32,7 +32,7 @@ const Dashboard = ({ activeid }: Props) => {
                     <li key={srv.id} className="flex justify-between items-center px-3 py-2 bg-gray-200 border-2 border-gray-200 rounded-lg">
                         <div className="flex gap-1 items-center">
                             {srv.id === activeid && <FontAwesomeIcon icon="circle" size="sm" className="text-green-300" />}
-                            {srv.name}
+                            {srv.title}
                         </div>
                         <Link 
                             to={`/manage/${srv.id}`} 

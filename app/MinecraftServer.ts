@@ -1,5 +1,5 @@
 import { spawn, ChildProcessWithoutNullStreams } from "child_process";
-import { LogEvents, LogStatus, ServerData, ServerLog, ServerStatus, LoadingStatus, ServerInfo, LoadState, MinecraftUser, isMinecraftUser, World, WorldBackup, WorldBackupMap, ScheduledWorld, isScheduledWorld } from "./types";
+import { LogEvents, LogStatus, ServerData, ServerLog, ServerStatus, LoadingStatus, ServerInfo, LoadState, MinecraftUser, isMinecraftUser, World, WorldBackup, WorldBackupMap, ScheduledWorld, isScheduledWorld, ServerInfoEditable } from "./types";
 import path from 'path'
 import { app } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
@@ -189,7 +189,7 @@ class MinecraftProcess {
 
             const tookTooLong = setTimeout(() => {
                 this.child.kill('SIGKILL')
-            }, 10000)
+            }, 5000)
 
             this.child.on('error', err => {
                 reject(err)
@@ -201,6 +201,23 @@ class MinecraftProcess {
                 this.onClose();
                 resolve();
             })
+        })
+    }
+
+    public forceClose() {
+        return new Promise<void>((resolve) => {
+
+            const tookTooLong = setTimeout(() => {
+                this.child.kill('SIGKILL')
+            }, 5000)
+            
+            this.child.on('exit', () => {
+                clearTimeout(tookTooLong);
+                this.onClose();
+                resolve();
+            })
+
+            this.child.kill('SIGTERM');
         })
     }
 
@@ -483,13 +500,13 @@ export class MinecraftServer {
         },5000)
     }
 
-    public stop() {
+    public stop(force?: boolean) {
         if(this.pingInterval) {
             clearInterval(this.pingInterval)
             this.pingInterval = null;
         }
         if(this.server) {
-            this.server.closeServer();
+            !force ? this.server.closeServer() : this.server.forceClose();
             this.broadcast('servers:current', null)
             this.broadcast('current:ping')
         }
@@ -541,8 +558,8 @@ export class MinecraftServer {
 
     public getServerInfo(): ServerInfo {
         return {
-            name: this.config.title,
-            dir: this.dir,
+            name: this.dir,
+            title: this.config.title,
             id: this.id,
             current: this.getCurrent() === this.id,
             state: this.serverState,
@@ -619,6 +636,10 @@ export class MinecraftServer {
                 }
             }
         }
+    }
+
+    public editServer<T extends keyof ServerInfoEditable>(key: T, value: ServerInfo[T]) {
+        this.setConfig(key, value);
     }
 
     public getBackups() {

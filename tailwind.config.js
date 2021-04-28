@@ -4,7 +4,17 @@ module.exports = {
   ],
   darkMode: 'class', // or 'media' or 'class'
   theme: {
-    extend: {},
+    extend: {
+      animation: {
+        'grow-width': 'grow-width 2.5s linear',
+      },
+      keyframes: {
+        'grow-width': {
+          '0%': { width: '0%' },
+          '100%': { width: '100%' }
+        }
+      }
+    },
   },
   variants: {
     extend: {

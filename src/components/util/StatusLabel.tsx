@@ -3,19 +3,26 @@ import React from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 
 interface Props {
-    status: ServerStatus
+    status: ServerStatus;
+    changes?: boolean;
 }
 
-const StatusLabel = ({ status }: Props) => {
+const StatusLabel = ({ status, changes }: Props) => {
     let icon: JSX.Element;
     let coloring: string;
     let label: string;
 
     switch(status) {
         case 'online': {
-            icon = <FontAwesomeIcon icon="check" fixedWidth />
-            coloring = 'bg-green-300 text-green-700'
-            label = 'Online'
+            if(!changes) {
+                icon = <FontAwesomeIcon icon="check" fixedWidth />
+                coloring = 'bg-green-300 text-green-700'
+                label = 'Online'
+            } else {
+                icon = <FontAwesomeIcon icon="exclamation-circle" fixedWidth />
+                coloring = 'bg-yellow-500 bg-opacity-25 text-yellow-500'
+                label = 'Restart Required'
+            }
             break;
         }
         case 'offline': {

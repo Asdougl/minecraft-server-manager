@@ -52,7 +52,7 @@ const Settings = (props: Props) => {
                     <Dropdown 
                         options={[
                             { name: 'None', value: '' },
-                            ...(servers ? servers.map(srv => ({ name: srv.name, value: srv.id })) : [])
+                            ...(servers ? servers.map(srv => ({ name: srv.title, value: srv.id })) : [])
                         ]}
                         value={defaultSrv || ''}
                         onChange={setDefaultSrv}

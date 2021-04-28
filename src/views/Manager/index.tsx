@@ -1,5 +1,5 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import React, { useContext, useState } from 'react'
+import React, { useContext, useEffect, useRef, useState } from 'react'
 import { CurrentServerContext } from '../../context/CurrentServerContext'
 import electron from '../../electron'
 import LogList from '../../components/LogList'
@@ -18,6 +18,8 @@ import Console from './Console'
 import Backups from './Backups'
 import Confirmation from '../../components/Confirmation'
 import Advanced from './Advanced'
+import FocusInput from '../../components/util/FocusInput'
+import Button from '../../components/util/Button'
 
 const dimName = (dimension: string) => {
     if(dimension === 'minecraft:overworld') {
@@ -48,6 +50,8 @@ const Manager = (props: Props) => {
     const backups = useSubscription(electron.servers.backups(params.serverid))
     const players = useSubscription(electron.current.players)
 
+    const [editingName, setEditingName] = useState(false)
+
     const onPropertySave = (label: string, value: string) => {
         electron.servers.setProperty({ id: params.serverid, property: label }, value)
     }
@@ -77,7 +81,7 @@ const Manager = (props: Props) => {
         // Server is Found
         view = <>   
             <ViewHeader title="Manage" back="/">
-                <StatusLabel status={server.state} />
+                <StatusLabel status={server.state} changes={server.changes} />
             </ViewHeader>
             {server.state === 'loading' ? <>
                 {/* Server is Starting Up */}
@@ -85,7 +89,7 @@ const Manager = (props: Props) => {
                     <FontAwesomeIcon className="text-blue-500 text-4xl" icon={['fad', 'spinner-third']} spin fixedWidth size="sm" />
 
                     <div className="font-semibold text-blue-500">
-                        Starting {server.name}
+                        Starting {server.title}
                     </div>
                 </h3>
                 <div className="w-full px-6 flex flex-col gap-1">
@@ -100,17 +104,25 @@ const Manager = (props: Props) => {
                 {loading && loading.state !== 'pending' && logs && logs.length && <div className="px-6 py-2 text-xs font-mono opacity-60">
                     {logs[logs.length - 1].message}
                 </div>}
+                <div className="flex-grow flex flex-col justify-end">
+                    <Button onClick={() => electron.current.stop(true)}>Cancel</Button>
+                </div>
                 
             </> : <>
                 {/* Server is online or offline */}
-                <h3 className="text-xl font-semibold mb-2 px-2 flex justify-between">
-                    {server.name}
-                    {server.changes &&
-                    <div className="rounded-full flex gap-1 text-sm items-center bg-yellow-500 bg-opacity-25 px-2 text-yellow-500">
-                        <FontAwesomeIcon icon="exclamation-circle" fixedWidth />
-                        <span>Restart Required</span>
-                    </div>
-                    }
+                <h3 className="mb-2 px-2 flex gap-2 items-center">
+                    <FocusInput
+                        editing={editingName}
+                        setEditing={setEditingName}
+                        current={server.title}
+                        onChange={name => electron.servers.edit(server.id, 'title', name)}
+                        className="focus:outline-none focus:ring focus:ring-blue-300 text-xl flex-grow rounded-lg font-semibold"
+                    >
+                        <div className="text-xl font-semibold">{server.title}</div>
+                    </FocusInput>
+                    <button className="opacity-10 hover:opacity-50 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 w-8 h-8 rounded-full flex items-center justify-center" onClick={() => setEditingName(!editingName)}>
+                        <FontAwesomeIcon icon="pencil" size="xs" />
+                    </button>
                 </h3>
                 <ul className="flex flex-col gap-2 relative">
                     <ManagerAction 
@@ -196,18 +208,13 @@ const Manager = (props: Props) => {
                             scheduleBackup={(worldname, cron) => electron.servers.scheduleBackup(server.id, worldname, cron)}
                         />
                     </ManagerAction>
-                    <ManagerAction 
-                        title="Open Directory"
-                        icon="folder-open"
-                        action={() => electron.servers.directory(server.id)}
-                    />
                     <ManagerAction
                         title="Advanced"
                         icon="toolbox"
                         modal="Advanced"
                     >
                         <Advanced 
-
+                            server={server}
                         />
                     </ManagerAction>
                     <ManagerAction 
@@ -232,7 +239,7 @@ const Manager = (props: Props) => {
     }
 
     return (
-        <ViewWrapper>
+        <ViewWrapper className="flex flex-col">
             {view}
         </ViewWrapper>
     )

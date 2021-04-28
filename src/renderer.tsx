@@ -5,12 +5,12 @@ import './renderer.css'
 
 // FontAwesome Configuration
 import { library } from '@fortawesome/fontawesome-svg-core'
-import { faCheck, faTimes, faPowerOff, faFolderOpen, faFolder, faFileAlt, faTerminal, faUndoAlt, faUsers, faSlidersH, faSyncAlt, faIdCard, faFile, faChevronLeft, faPlus, faCircle as fasCircle, faChevronRight, faSave, faGlobeStand, faChevronDown, faChevronUp, faFileArchive, faPencil, faCog, faUsersCog, faExclamationCircle, faQuestion, faHistory, faAlarmClock, faToolbox } from '@fortawesome/pro-solid-svg-icons'
+import { faCheck, faTimes, faPowerOff, faFolderOpen, faFolder, faFileAlt, faTerminal, faUndoAlt, faUsers, faSlidersH, faSyncAlt, faIdCard, faFile, faChevronLeft, faPlus, faCircle as fasCircle, faChevronRight, faSave, faGlobeStand, faChevronDown, faChevronUp, faFileArchive, faPencil, faCog, faUsersCog, faExclamationCircle, faQuestion, faHistory, faAlarmClock, faToolbox, faTrash, faArchive } from '@fortawesome/pro-solid-svg-icons'
 import { faCircle, faCheckCircle, faFileCheck } from '@fortawesome/pro-regular-svg-icons'
 import { faSpinnerThird } from '@fortawesome/pro-duotone-svg-icons'
 import { faJava } from '@fortawesome/free-brands-svg-icons'
 import { faCogs } from '@fortawesome/pro-light-svg-icons'
-library.add( faCheck, faTimes, faPowerOff, faFolderOpen, faFolder, faFileAlt, faTerminal, faUndoAlt, faCircle, faCheckCircle, faUsers, faSlidersH, faSpinnerThird, faFileCheck, faSyncAlt, faIdCard, faJava, faFile, faChevronLeft, faPlus, fasCircle, faChevronRight, faSave, faGlobeStand, faChevronDown, faChevronUp, faFileArchive, faPencil, faCog, faUsersCog, faExclamationCircle, faQuestion, faCogs, faHistory, faAlarmClock, faToolbox )
+library.add( faCheck, faTimes, faPowerOff, faFolderOpen, faFolder, faFileAlt, faTerminal, faUndoAlt, faCircle, faCheckCircle, faUsers, faSlidersH, faSpinnerThird, faFileCheck, faSyncAlt, faIdCard, faJava, faFile, faChevronLeft, faPlus, fasCircle, faChevronRight, faSave, faGlobeStand, faChevronDown, faChevronUp, faFileArchive, faPencil, faCog, faUsersCog, faExclamationCircle, faQuestion, faCogs, faHistory, faAlarmClock, faToolbox, faTrash, faArchive )
 
 let root = document.createElement('div')
 root.id = 'root'

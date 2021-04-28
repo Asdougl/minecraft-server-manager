@@ -31,7 +31,7 @@ const Setup = (props: Props) => {
 
     useEffect(() => {
         const potentialDir = name.toLowerCase().replace(/[^a-z0-9-_ ]/g, '').replace(/ /g, '-')
-        setValidName(name ? (servers ? !servers.find(srv => srv.name === name || srv.dir === name || srv.dir === potentialDir || srv.name === potentialDir) : false) : true)
+        setValidName(name ? (servers ? !servers.find(srv => srv.title === name || srv.name === name || srv.name === potentialDir || srv.title === potentialDir) : false) : true)
     },[name, servers])
 
     useEffect(() => {

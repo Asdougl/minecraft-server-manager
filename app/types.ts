@@ -33,17 +33,14 @@ export interface ServerData {
 }
 
 /* Server Representation for Renderer */
-export interface ServerInfo {
-    id: string;
-    name: string;
-    dir: string;
+export interface ServerInfo extends ServerData {
     current: boolean;
     state: ServerStatus;
-    worlds: World[];
-    activeWorld: string;
     properties: Tree;
     changes: boolean;
 }
+
+export type ServerInfoEditable = Pick<ServerInfo, 'title'>;
 
 /* Info Required to Create a Server */
 export interface ServerCreateInfo {
@@ -121,6 +118,8 @@ export type Task<T> = (arg: T) => void;
 export type Creator<T> = (data: T) => Promise<boolean>;
 export type Mutator<T, U> = (arg: T, data: U) => Promise<void>;
 
+export type MutateMap<T, U extends keyof T> = (arg: string, key: T, value: T[U]) => Promise<void>;
+
 type ConditionalHook<S, T> = (id: S) => Hook<T>
 
 export interface LoadState {
@@ -152,7 +151,7 @@ export interface API {
         current: Hook<ServerInfo | null>;
         directory: Task<string>;
         create: Creator<ServerCreateInfo>;
-        edit: Mutator<string, Pick<ServerInfo, 'name'>>;
+        edit: <T extends keyof ServerInfoEditable>(serverid: string, key: T, value: ServerInfo[T]) => Promise<void>;
         setProperty: Mutator<{ id: string, property: string }, string>;
         addWorld: Mutator<string, string>;
         renameWorld: (serverid: string, worldname: string, title: string) => Promise<void>;
@@ -163,7 +162,7 @@ export interface API {
     },
     current: {
         start: Task<string>;
-        stop: Action;
+        stop: (force?: boolean) => void;
         restart: Action;
         status: Hook<ServerStatus | undefined>;
         loading: Hook<LoadState | undefined>;

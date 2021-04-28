@@ -159,7 +159,7 @@ const api: API = {
         // todo
         create: (info) => ipcRenderer.invoke('servers:create', info),
         // todo
-        edit: (id, info) => ipcRenderer.invoke('servers:edit', id, info),
+        edit: (id, key, value) => ipcRenderer.invoke('servers:edit', id, key, value),
         directory: serverid => ipcRenderer.invoke('servers:directory', serverid),
         // todo
         setProperty: ({ id, property }, value) => ipcRenderer.invoke('servers:properties-edit', id, property, value),
@@ -177,7 +177,7 @@ const api: API = {
     },
     current: {
         start: serverid => ipcRenderer.invoke('current:start', serverid),
-        stop: () => ipcRenderer.invoke('current:stop'),
+        stop: force => ipcRenderer.invoke('current:stop', force),
         restart: () => ipcRenderer.invoke('current:restart'),
         status: {
             get: () => ipcRenderer.invoke('current:status'),

@@ -17,7 +17,7 @@ const ServerStats = ({ server }: Props) => {
         <div className="w-full px-2 py-1 bg-green-300 text-green-700 flex justify-between items-center">
             <div className="flex gap-1 items-center">
                 <FontAwesomeIcon icon="check" size="sm" fixedWidth /> 
-                <span>{server.name} Online </span>
+                <span>{server.title} Online </span>
                 {ping && `(${ping.players}/${ping.max})`}
             </div>
             <Link to={`/manage/${server.id}`} className="bg-green-400 px-2 rounded hover:bg-green-300 cursor-pointer">Manage</Link>

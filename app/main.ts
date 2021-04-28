@@ -1,11 +1,12 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import path from 'path'
-import { LoadState, MinecraftUser, Preferences, ServerCreateInfo, ServerInfo, Theme } from './types'
+import { LoadState, MinecraftUser, Preferences, ServerCreateInfo, ServerInfo, ServerInfoEditable, Theme } from './types'
 import publicip from 'public-ip'
 import { getCurrent, getServer, getServerList, rebuildServers, startServer, createServer, pingCurrent } from './servers'
 import { openServerPath } from './utils'
 import AutoLaunch from 'auto-launch'
 import ElectronStore from 'electron-store'
+import { IpcMainInvokeEvent } from 'electron/main'
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
@@ -251,7 +252,7 @@ ipcMain.handle('servers:current', () => {
 
 ipcMain.handle('servers:directory', (evt, serverid: string) => {
     const srv = getServer(serverid)
-    if(srv) openServerPath(srv.getServerInfo().dir)
+    if(srv) openServerPath(srv.getServerInfo().name)
 })
 
 ipcMain.handle('servers:create', async (evt, config: ServerCreateInfo) => {
@@ -270,8 +271,12 @@ ipcMain.handle('servers:create', async (evt, config: ServerCreateInfo) => {
     }
 })
 
-ipcMain.handle('servers:edit', (evt, id: string, config: ServerInfo) => {
+ipcMain.handle('servers:edit', <T extends keyof ServerInfoEditable>(evt: IpcMainInvokeEvent, serverid: string, key: T, value: ServerInfo[T]) => {
     // TODO
+    const srv = getServer(serverid);
+    if(srv) {
+        srv.editServer(key, value);
+    }
 })
 
 ipcMain.handle('servers:properties-edit', (evt, id: string, property: string, value: string) => {
@@ -330,11 +335,11 @@ ipcMain.handle('current:start', (evt, serverid: string) => {
     return startServer(serverid);
 })
 
-ipcMain.handle('current:stop', () => {
+ipcMain.handle('current:stop', (evt, force?: boolean) => {
     // Stop the current running server if there is one
     const curr = getCurrent();
     if(curr) {
-        curr.stop();
+        curr.stop(force);
     }
 })
 
